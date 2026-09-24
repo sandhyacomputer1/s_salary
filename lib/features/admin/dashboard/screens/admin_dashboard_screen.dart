@@ -7,10 +7,10 @@ import '../../../../data/models/employee.dart';
 import '../../../../data/services/employee_service.dart';
 import '../../../../data/services/leave_service.dart';
 import '../../../../data/services/expense_service.dart';
-
+import '../../shift_roster/screens/shift_roster_screen.dart';
 import '../../employees/screens/add_employee_screen.dart';
 import '../../employees/screens/employee_details_screen.dart';
-
+import '../../calendar/screens/calendar_screen.dart';
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({
     super.key,
@@ -753,7 +753,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       title: 'Workforce Snapshot',
       subtitle: 'Active employees, leaves, expenses & archive at a glance',
       icon: Icons.insights_outlined,
-      child: _buildSnapshotChart(),
+      child: _buildSnapshotChart(mobile),
     );
 
     final departments = _buildCardShell(
@@ -763,7 +763,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ? 'No active employees yet'
           : 'Top ${_departmentBreakdown().length} departments by headcount',
       icon: Icons.account_tree_outlined,
-      child: _buildDepartmentChart(),
+      child: _buildDepartmentChart(mobile),
     );
 
     final quickActions = _buildQuickActions(mobile);
@@ -874,42 +874,127 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ----------------------------------------------------------
-  // SNAPSHOT CHART — the 4 summary metrics as animated bars
+  // SNAPSHOT — 4 circular gauges, one per metric
   // ----------------------------------------------------------
 
-  Widget _buildSnapshotChart() {
-    final metrics = [
-      ('Active Employees', _employees.length, const Color(0xFFE96832)),
-      ('Pending Leaves', _pendingLeaves, const Color(0xFFE8A317)),
-      ('Pending Expenses', _pendingExpenses, const Color(0xFF7A5AF8)),
-      ('Archived Employees', _archivedEmployees.length, const Color(0xFF64748B)),
+  Widget _buildSnapshotChart(bool mobile) {
+    final metrics = <_MetricData>[
+      _MetricData(
+        label: 'Active Employees',
+        value: _employees.length,
+        icon: Icons.people_outline_rounded,
+        color: const Color(0xFFE96832),
+      ),
+      _MetricData(
+        label: 'Pending Leaves',
+        value: _pendingLeaves,
+        icon: Icons.event_note_outlined,
+        color: const Color(0xFFE8A317),
+      ),
+      _MetricData(
+        label: 'Pending Expenses',
+        value: _pendingExpenses,
+        icon: Icons.receipt_long_outlined,
+        color: const Color(0xFF7A5AF8),
+      ),
+      _MetricData(
+        label: 'Archived Employees',
+        value: _archivedEmployees.length,
+        icon: Icons.person_off_outlined,
+        color: const Color(0xFF64748B),
+      ),
     ];
 
-    final maxValue = metrics
-        .map((m) => m.$2)
-        .fold<int>(0, (max, v) => v > max ? v : max)
-        .clamp(1, 1 << 30);
+    var maxValue = 1;
+    for (final metric in metrics) {
+      if (metric.value > maxValue) maxValue = metric.value;
+    }
+
+    return Wrap(
+      alignment: WrapAlignment.spaceEvenly,
+      runSpacing: 20,
+      children: metrics.map((metric) {
+        return SizedBox(
+          width: mobile ? 132 : 150,
+          child: _buildGaugeTile(metric, maxValue, mobile),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildGaugeTile(_MetricData metric, int maxValue, bool mobile) {
+    final fraction = maxValue == 0 ? 0.0 : metric.value / maxValue;
+
+    final size = mobile ? 84.0 : 92.0;
 
     return Column(
       children: [
-        for (final metric in metrics) ...[
-          _buildAnimatedBarRow(
-            label: metric.$1,
-            value: metric.$2,
-            maxValue: maxValue,
-            color: metric.$3,
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: fraction.clamp(0.0, 1.0)),
+          duration: const Duration(milliseconds: 900),
+          curve: Curves.easeOutCubic,
+          builder: (context, animatedFraction, _) {
+            return SizedBox(
+              width: size,
+              height: size,
+              child: CustomPaint(
+                painter: _RingGaugePainter(
+                  fraction: animatedFraction,
+                  color: metric.color,
+                  trackColor: _pageBg,
+                  strokeWidth: 8,
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(metric.icon, size: 17, color: metric.color),
+                      const SizedBox(height: 3),
+                      Text(
+                        metric.value.toString(),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: _textDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        Text(
+          metric.label,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade600,
           ),
-          if (metric != metrics.last) const SizedBox(height: 14),
-        ],
+        ),
       ],
     );
   }
 
   // ----------------------------------------------------------
-  // DEPARTMENT CHART — headcount per department
+  // DEPARTMENT DONUT — headcount share per department
   // ----------------------------------------------------------
 
-  Widget _buildDepartmentChart() {
+  static const List<Color> _departmentPalette = [
+    Color(0xFFE96832),
+    Color(0xFF2878FF),
+    Color(0xFF18864B),
+    Color(0xFF7A5AF8),
+    Color(0xFFE8A317),
+    Color(0xFFC62828),
+  ];
+
+  Widget _buildDepartmentChart(bool mobile) {
     final breakdown = _departmentBreakdown();
 
     if (breakdown.isEmpty) {
@@ -918,29 +1003,131 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       );
     }
 
-    const palette = [
-      Color(0xFFE96832),
-      Color(0xFF2878FF),
-      Color(0xFF18864B),
-      Color(0xFF7A5AF8),
-      Color(0xFFE8A317),
-      Color(0xFFC62828),
-    ];
+    final total = breakdown.fold<int>(0, (sum, e) => sum + e.value);
 
-    final maxValue =
-    breakdown.first.value.clamp(1, 1 << 30);
+    final segments = <double>[];
+    final colors = <Color>[];
 
-    return Column(
-      children: [
-        for (var i = 0; i < breakdown.length; i++) ...[
-          _buildAnimatedBarRow(
-            label: breakdown[i].key,
-            value: breakdown[i].value,
-            maxValue: maxValue,
-            color: palette[i % palette.length],
+    for (var i = 0; i < breakdown.length; i++) {
+      segments.add(breakdown[i].value.toDouble());
+      colors.add(_departmentPalette[i % _departmentPalette.length]);
+    }
+
+    final donut = TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 1000),
+      curve: Curves.easeOutCubic,
+      builder: (context, progress, _) {
+        return SizedBox(
+          width: 152,
+          height: 152,
+          child: CustomPaint(
+            painter: _DonutPainter(
+              values: segments,
+              colors: colors,
+              trackColor: _pageBg,
+              strokeWidth: 18,
+              progress: progress,
+            ),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    total.toString(),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: _textDark,
+                    ),
+                  ),
+                  Text(
+                    'Employees',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          if (i != breakdown.length - 1) const SizedBox(height: 14),
+        );
+      },
+    );
+
+    final legend = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < breakdown.length; i++)
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: i == breakdown.length - 1 ? 0 : 10,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(
+                    color: colors[i],
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    breakdown[i].key,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: _textDark,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${breakdown[i].value}',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: colors[i],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '(${total == 0 ? 0 : (breakdown[i].value * 100 / total).round()}%)',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+
+    if (mobile) {
+      return Column(
+        children: [
+          donut,
+          const SizedBox(height: 18),
+          legend,
         ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        donut,
+        const SizedBox(width: 24),
+        Expanded(child: legend),
       ],
     );
   }
@@ -967,76 +1154,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
         ],
       ),
-    );
-  }
-
-  /// A single labelled bar that animates its fill width whenever
-  /// it is (re)built — e.g. on first load and on every refresh.
-  Widget _buildAnimatedBarRow({
-    required String label,
-    required int value,
-    required int maxValue,
-    required Color color,
-  }) {
-    final fraction = maxValue == 0 ? 0.0 : value / maxValue;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: _textDark,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              value.toString(),
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            height: 8,
-            width: double.infinity,
-            color: _pageBg,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: fraction.clamp(0.0, 1.0)),
-                duration: const Duration(milliseconds: 700),
-                curve: Curves.easeOutCubic,
-                builder: (context, animatedFraction, _) {
-                  return FractionallySizedBox(
-                    widthFactor: animatedFraction,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: color,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -1702,10 +1819,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   _drawerItem(
                     icon: Icons.calendar_month_outlined,
                     title: 'Calendar',
+                    onTap: () {
+                      Navigator.pop(context);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const CalendarScreen(),
+                        ),
+                      );
+                    },
                   ),
                   _drawerItem(
                     icon: Icons.schedule_outlined,
                     title: 'Shift Roster & Planner',
+                    onTap: () {
+                      Navigator.pop(context);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ShiftRosterScreen(),
+                        ),
+                      );
+                    },
                   ),
                   _drawerItem(
                     icon: Icons.location_on_outlined,
@@ -2188,5 +2325,163 @@ class _StatusBadge extends StatelessWidget {
     }
 
     return value[0].toUpperCase() + value.substring(1);
+  }
+}
+
+// =================================================================
+// METRIC DATA (for the snapshot gauges)
+// =================================================================
+
+class _MetricData {
+  final String label;
+  final int value;
+  final IconData icon;
+  final Color color;
+
+  const _MetricData({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+}
+
+// =================================================================
+// RING GAUGE PAINTER — single animated circular progress ring
+// =================================================================
+
+class _RingGaugePainter extends CustomPainter {
+  final double fraction;
+  final Color color;
+  final Color trackColor;
+  final double strokeWidth;
+
+  _RingGaugePainter({
+    required this.fraction,
+    required this.color,
+    required this.trackColor,
+    required this.strokeWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.shortestSide - strokeWidth) / 2;
+
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    canvas.drawCircle(center, radius, trackPaint);
+
+    if (fraction <= 0) return;
+
+    final progressPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    const startAngle = -3.14159265 / 2;
+    final sweepAngle = 2 * 3.14159265 * fraction.clamp(0.0, 1.0);
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      sweepAngle,
+      false,
+      progressPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingGaugePainter oldDelegate) {
+    return oldDelegate.fraction != fraction ||
+        oldDelegate.color != color ||
+        oldDelegate.trackColor != trackColor ||
+        oldDelegate.strokeWidth != strokeWidth;
+  }
+}
+
+// =================================================================
+// DONUT PAINTER — multi-segment donut that draws itself in as
+// [progress] goes from 0 to 1
+// =================================================================
+
+class _DonutPainter extends CustomPainter {
+  final List<double> values;
+  final List<Color> colors;
+  final Color trackColor;
+  final double strokeWidth;
+  final double progress;
+
+  _DonutPainter({
+    required this.values,
+    required this.colors,
+    required this.trackColor,
+    required this.strokeWidth,
+    required this.progress,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.shortestSide - strokeWidth) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    const twoPi = 2 * 3.14159265;
+    const startAngle = -3.14159265 / 2;
+
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    canvas.drawCircle(center, radius, trackPaint);
+
+    final total = values.fold<double>(0, (sum, v) => sum + v);
+
+    if (total <= 0 || progress <= 0) return;
+
+    final revealedSweep = twoPi * progress.clamp(0.0, 1.0);
+
+    var cursor = 0.0;
+
+    for (var i = 0; i < values.length; i++) {
+      final segmentSweep = twoPi * (values[i] / total);
+
+      final drawSweep =
+      (revealedSweep - cursor).clamp(0.0, segmentSweep);
+
+      if (drawSweep > 0) {
+        final segmentPaint = Paint()
+          ..color = colors[i % colors.length]
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.butt;
+
+        canvas.drawArc(
+          rect,
+          startAngle + cursor,
+          drawSweep,
+          false,
+          segmentPaint,
+        );
+      }
+
+      cursor += segmentSweep;
+
+      if (cursor >= revealedSweep) break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.values != values ||
+        oldDelegate.colors != colors ||
+        oldDelegate.trackColor != trackColor ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }
