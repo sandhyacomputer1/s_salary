@@ -322,37 +322,40 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
 
     setState(() => _isSaving = true);
 
-    var successCount = 0;
-    var failureCount = 0;
+    try {
+      // ONE bulk request, not one call per employee. Confirmed from
+      // the console: calling this once per employee with a singular
+      // 'employeeId' made the backend's own validation reply
+      // "Please select at least one employee." on every call — it
+      // expects the full list in a single 'employeeIds' array.
+      await _shiftRosterService.assignRoster({
+        'shiftId': shiftId,
+        'employeeIds': employeeIds,
+        'startDate': startDate.toIso8601String().split('T').first,
+        'endDate': endDate.toIso8601String().split('T').first,
+      });
 
-    for (final employeeId in employeeIds) {
-      try {
-        await _shiftRosterService.assignRoster({
-          'employeeId': employeeId,
-          'shiftId': shiftId,
-          'startDate': startDate.toIso8601String().split('T').first,
-          'endDate': endDate.toIso8601String().split('T').first,
-        });
-        successCount++;
-      } catch (_) {
-        failureCount++;
-      }
-    }
+      await _reloadRosterSchedules();
 
-    await _reloadRosterSchedules();
+      if (!mounted) return;
 
-    if (!mounted) return;
+      setState(() => _isSaving = false);
 
-    setState(() => _isSaving = false);
-
-    if (failureCount == 0) {
       _showMessage(
-        'Roster schedule assigned to $successCount employee'
-            '${successCount == 1 ? '' : 's'}.',
+        'Roster schedule assigned to ${employeeIds.length} employee'
+            '${employeeIds.length == 1 ? '' : 's'}.',
       );
-    } else {
+    } catch (e) {
+      debugPrint('ASSIGN ROSTER FAILED: $e');
+
+      await _reloadRosterSchedules();
+
+      if (!mounted) return;
+
+      setState(() => _isSaving = false);
+
       _showMessage(
-        'Assigned to $successCount employee(s); $failureCount failed.',
+        'Assign roster failed: ${e.toString().replaceFirst('Exception: ', '')}',
       );
     }
   }
