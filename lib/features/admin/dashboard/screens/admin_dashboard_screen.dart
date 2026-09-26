@@ -7,6 +7,8 @@ import '../../../../data/models/employee.dart';
 import '../../../../data/services/employee_service.dart';
 import '../../../../data/services/leave_service.dart';
 import '../../../../data/services/expense_service.dart';
+import '../../departments/screens/department_screen.dart';
+import '../../expenses/screens/expense_screen.dart';
 import '../../shift_roster/screens/shift_roster_screen.dart';
 import '../../employees/screens/add_employee_screen.dart';
 import '../../employees/screens/employee_details_screen.dart';
@@ -1855,6 +1857,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   _drawerItem(
                     icon: Icons.account_tree_outlined,
                     title: 'Departments',
+                    onTap: () {
+                      Navigator.pop(context);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const DepartmentScreen(),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 10),
                   _drawerSection('FINANCE'),
@@ -1865,6 +1877,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   _drawerItem(
                     icon: Icons.receipt_long_outlined,
                     title: 'Expenses',
+                    onTap: () {
+                      Navigator.pop(context);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ExpenseScreen(),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 10),
                   _drawerSection('COMPANY & SECURITY'),
