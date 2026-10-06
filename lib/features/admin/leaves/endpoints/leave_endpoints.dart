@@ -1,33 +1,42 @@
-class ExpenseEndpoints {
-  ExpenseEndpoints._();
+class LeaveEndpoints {
+  LeaveEndpoints._();
 
   // ============================================================
-  // GET /expenses
+  // GET /leaves
+  // Optional query param: ?status=pending|approved|rejected|cancelled
   // ============================================================
 
-  static const String expenses = '/expenses';
+  static const String leaves = '/leaves';
 
   // ============================================================
-  // POST /expenses
+  // GET /leaves/company/:companyId
   // ============================================================
 
-  static const String createExpense = '/expenses';
+  static String leavesByCompany(String companyId) {
+    return '/leaves/company/$companyId';
+  }
 
   // ============================================================
-  // PUT /expenses/:id/status
+  // GET /leaves/employee/:employeeId
+  // ============================================================
+
+  static String leavesByEmployee(String employeeId) {
+    return '/leaves/employee/$employeeId';
+  }
+
+  // ============================================================
+  // PUT /leaves/:id/status
   // Body: {"status": "approved" | "rejected"}
-  // Used for BOTH approve and reject.
   // ============================================================
 
   static String updateStatus(String id) {
-    return '/expenses/$id/status';
+    return '/leaves/$id/status';
   }
 
   // ============================================================
   // GET /employees
   // Used to resolve employee names for display
-  // (the expenses API's employeeId object only has _id and
-  // employeeCode, no name).
+  // (the leaves API's employeeId object does not include name).
   // ============================================================
 
   static const String employees = '/employees';

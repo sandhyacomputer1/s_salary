@@ -1,32 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../models/expense_model.dart';
+import '../models/leave_model.dart';
 
-class ExpenseDetailsScreen extends StatefulWidget {
-  final ExpenseModel expense;
+class LeaveDetailsScreen extends StatefulWidget {
+  final LeaveModel leave;
 
   // Each callback returns true when the action succeeded.
   final Future<bool> Function()? onApprove;
   final Future<bool> Function()? onReject;
 
-  const ExpenseDetailsScreen({
+  const LeaveDetailsScreen({
     super.key,
-    required this.expense,
+    required this.leave,
     this.onApprove,
     this.onReject,
   });
 
   @override
-  State<ExpenseDetailsScreen> createState() => _ExpenseDetailsScreenState();
+  State<LeaveDetailsScreen> createState() => _LeaveDetailsScreenState();
 }
 
-class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
+class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
   static const Color primary = Color(0xFFE96832);
   static const Color primaryLight = Color(0xFFFFEEE7);
   static const Color danger = Color(0xFFD64545);
   static const Color textDark = Color(0xFF18212F);
   static const Color textMedium = Color(0xFF4B5563);
+  static const Color textLight = Color(0xFF8A93A1);
   static const Color border = Color(0xFFE1E5EA);
   static const Color tableHeaderBg = Color(0xFFF7F8FA);
 
@@ -47,6 +47,11 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
           accent: danger,
           background: Color(0xFFFFE8E8),
         );
+      case 'cancelled':
+        return const _StatusStyle(
+          accent: textLight,
+          background: Color(0xFFF1F2F4),
+        );
       default:
         return const _StatusStyle(
           accent: primary,
@@ -55,46 +60,20 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
     }
   }
 
-  String _avatarInitial(ExpenseModel expense) {
-    final label = expense.employeeDisplayLabel;
+  String _avatarInitial(LeaveModel leave) {
+    final name = leave.employeeName;
 
-    if (label == '—' || label.trim().isEmpty) {
+    if (name != '—' && name.trim().isNotEmpty) {
+      return name.trim().characters.first.toUpperCase();
+    }
+
+    final code = leave.employeeCode;
+
+    if (code == '—' || code.trim().isEmpty) {
       return '?';
     }
 
-    // If the label is the raw employee code (e.g. EMP-0001), strip the
-    // prefix like before; otherwise it's a real name, use its first letter.
-    if (label.startsWith('EMP-')) {
-      return label.replaceAll('EMP-', '').characters.first;
-    }
-
-    return label.trim().characters.first.toUpperCase();
-  }
-
-  Future<void> _openBill(BuildContext context) async {
-    final url = widget.expense.billUrl;
-
-    if (url.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No bill attached to this expense')),
-      );
-      return;
-    }
-
-    final uri = Uri.tryParse(url);
-
-    if (uri == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Invalid bill URL')));
-      return;
-    }
-
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-
-    if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Could not open bill')));
-    }
+    return code.replaceAll('EMP-', '').characters.first;
   }
 
   Future<void> _approve(BuildContext context) async {
@@ -131,10 +110,10 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final expense = widget.expense;
-    final isPending = expense.status.toLowerCase() == 'pending';
-    final hasBill = expense.billUrl.trim().isNotEmpty;
-    final style = _statusStyle(expense.status);
+    final leave = widget.leave;
+    final isPending = leave.status.toLowerCase() == 'pending';
+    final hasReason = leave.reason.trim().isNotEmpty;
+    final style = _statusStyle(leave.status);
     final hasActions =
         isPending && (widget.onApprove != null || widget.onReject != null);
 
@@ -146,7 +125,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
         elevation: 0,
         centerTitle: false,
         title: const Text(
-          'Expense Details',
+          'Leave Details',
           style: TextStyle(
             color: textDark,
             fontWeight: FontWeight.w700,
@@ -172,14 +151,14 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                 child: Row(
                   children: [
                     Hero(
-                      tag: 'expense-avatar-${expense.id}',
+                      tag: 'leave-avatar-${leave.id}',
                       child: Material(
                         color: Colors.transparent,
                         child: CircleAvatar(
                           radius: 24,
                           backgroundColor: primaryLight,
                           child: Text(
-                            _avatarInitial(expense),
+                            _avatarInitial(leave),
                             style: const TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w800,
@@ -195,7 +174,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            expense.category,
+                            leave.employeeDisplayLabel,
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
@@ -204,7 +183,9 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            expense.employeeDisplayLabel,
+                            leave.leaveType.isEmpty
+                                ? 'Leave'
+                                : leave.leaveType,
                             style: const TextStyle(
                               fontSize: 12.5,
                               color: textMedium,
@@ -218,9 +199,9 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          '₹${expense.amount.toStringAsFixed(2)}',
+                          '${_formatDays(leave.totalDays)} day(s)',
                           style: const TextStyle(
-                            fontSize: 17,
+                            fontSize: 15,
                             fontWeight: FontWeight.w800,
                             color: textDark,
                           ),
@@ -236,7 +217,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            expense.status.toUpperCase(),
+                            leave.status.toUpperCase(),
                             style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w800,
@@ -253,22 +234,21 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
 
               const SizedBox(height: 16),
 
-              // Expense Information table
+              // Leave Information table
               _TableCard(
-                title: 'Expense Information',
-                icon: Icons.receipt_long_outlined,
+                title: 'Leave Information',
+                icon: Icons.event_note_outlined,
                 rows: [
-                  _TableRow('Employee', expense.employeeDisplayLabel),
-                  _TableRow('Employee Code', expense.employeeCode),
-                  _TableRow('Category', expense.category),
-                  _TableRow('Amount', '₹${expense.amount.toStringAsFixed(2)}'),
-                  _TableRow('Expense Date', _formatDate(expense.expenseDate)),
-                  _TableRow('Status', expense.status),
+                  _TableRow('Leave Type', leave.leaveType),
+                  _TableRow('Start Date', _formatDate(leave.startDate)),
+                  _TableRow('End Date', _formatDate(leave.endDate)),
+                  _TableRow('Total Days', _formatDays(leave.totalDays)),
+                  _TableRow('Half Day', leave.isHalfDay ? 'Yes' : 'No'),
+                  _TableRow('Paid', leave.isPaid ? 'Yes' : 'No'),
+                  _TableRow('Status', leave.status),
                   _TableRow(
-                    'Description',
-                    expense.description.isEmpty
-                        ? 'No description provided'
-                        : expense.description,
+                    'Reason',
+                    hasReason ? leave.reason : 'No reason provided',
                   ),
                 ],
               ),
@@ -280,34 +260,17 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
                 title: 'Timeline',
                 icon: Icons.timeline_rounded,
                 rows: [
-                  _TableRow('Submitted At', _formatDateTime(expense.submittedAt)),
-                  _TableRow('Created At', _formatDateTime(expense.createdAt)),
-                  if (expense.actionedAt != null)
-                    _TableRow('Actioned At', _formatDateTime(expense.actionedAt)),
-                  if (expense.approvedBy.trim().isNotEmpty)
+                  _TableRow('Applied At', _formatDateTime(leave.appliedAt)),
+                  _TableRow('Created At', _formatDateTime(leave.createdAt)),
+                  if (leave.actionedAt != null)
+                    _TableRow('Actioned At', _formatDateTime(leave.actionedAt)),
+                  if (leave.approvedBy.trim().isNotEmpty)
                     _TableRow(
-                      expense.isRejected ? 'Rejected By' : 'Approved By',
-                      expense.approvedBy,
+                      leave.isRejected ? 'Rejected By' : 'Approved By',
+                      leave.approvedBy,
                     ),
                 ],
               ),
-
-              if (hasBill) ...[
-                const SizedBox(height: 16),
-                _TableCard(
-                  title: 'Supporting Document',
-                  icon: Icons.description_outlined,
-                  rows: const [
-                    _TableRow('Bill', 'Attached'),
-                  ],
-                  trailingAction: TextButton.icon(
-                    onPressed: () => _openBill(context),
-                    icon: const Icon(Icons.open_in_new_rounded, size: 15),
-                    label: const Text('View Bill'),
-                    style: TextButton.styleFrom(foregroundColor: primary),
-                  ),
-                ),
-              ],
 
               // Space for the bottom action bar
               if (hasActions)
@@ -404,6 +367,12 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
       )
           : null,
     );
+  }
+
+  String _formatDays(double days) {
+    return days.truncateToDouble() == days
+        ? days.toStringAsFixed(0)
+        : days.toStringAsFixed(1);
   }
 
   String _formatDate(DateTime? date) {

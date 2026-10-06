@@ -88,4 +88,42 @@ class ExpenseService {
       },
     );
   }
+
+  // ============================================================
+  // GET EMPLOYEE NAMES
+  // Returns a map of employee _id -> name, built from GET /employees.
+  // Used to show the employee's real name on expense cards/details
+  // (the expenses API's employeeId object only has _id and
+  // employeeCode, no name).
+  // ============================================================
+
+  Future<Map<String, String>> getEmployeeNames() async {
+    final response = await _apiClient.get(
+      ExpenseEndpoints.employees,
+    );
+
+    if (response is! List) {
+      throw Exception('Invalid employees response.');
+    }
+
+    final map = <String, String>{};
+
+    for (final item in response) {
+      if (item is! Map) continue;
+
+      final employee = Map<String, dynamic>.from(item);
+
+      final id = employee['_id']?.toString();
+      final name = employee['name']?.toString();
+
+      if (id != null &&
+          id.isNotEmpty &&
+          name != null &&
+          name.trim().isNotEmpty) {
+        map[id] = name;
+      }
+    }
+
+    return map;
+  }
 }

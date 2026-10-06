@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../models/expense_model.dart';
+import '../models/leave_model.dart';
 
-class ExpenseCard extends StatefulWidget {
-  final ExpenseModel expense;
+class LeaveCard extends StatefulWidget {
+  final LeaveModel leave;
   final VoidCallback? onTap;
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
   final int index;
 
-  const ExpenseCard({
+  const LeaveCard({
     super.key,
-    required this.expense,
+    required this.leave,
     this.onTap,
     this.onApprove,
     this.onReject,
@@ -19,10 +19,10 @@ class ExpenseCard extends StatefulWidget {
   });
 
   @override
-  State<ExpenseCard> createState() => _ExpenseCardState();
+  State<LeaveCard> createState() => _LeaveCardState();
 }
 
-class _ExpenseCardState extends State<ExpenseCard>
+class _LeaveCardState extends State<LeaveCard>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _fade;
@@ -80,6 +80,11 @@ class _ExpenseCardState extends State<ExpenseCard>
           accent: danger,
           background: Color(0xFFFFE8E8),
         );
+      case 'cancelled':
+        return const _StatusStyle(
+          accent: textLight,
+          background: Color(0xFFF1F2F4),
+        );
       default:
         return const _StatusStyle(
           accent: primary,
@@ -88,29 +93,28 @@ class _ExpenseCardState extends State<ExpenseCard>
     }
   }
 
-  String _avatarInitial(ExpenseModel expense) {
-    final label = expense.employeeDisplayLabel;
+  String _avatarInitial(LeaveModel leave) {
+    final name = leave.employeeName;
 
-    if (label == '—' || label.trim().isEmpty) {
+    if (name != '—' && name.trim().isNotEmpty) {
+      return name.trim().characters.first.toUpperCase();
+    }
+
+    final code = leave.employeeCode;
+
+    if (code == '—' || code.trim().isEmpty) {
       return '?';
     }
 
-    // If the label is the raw employee code (e.g. EMP-0001), strip the
-    // prefix like before; otherwise it's a real name, use its first letter.
-    if (label.startsWith('EMP-')) {
-      return label.replaceAll('EMP-', '').characters.first;
-    }
-
-    return label.trim().characters.first.toUpperCase();
+    return code.replaceAll('EMP-', '').characters.first;
   }
 
   @override
   Widget build(BuildContext context) {
-    final expense = widget.expense;
-    final isPending = expense.status.toLowerCase() == 'pending';
-    final style = _statusStyle(expense.status);
-    final hasBill = expense.billUrl.trim().isNotEmpty;
-    final hasDescription = expense.description.trim().isNotEmpty;
+    final leave = widget.leave;
+    final isPending = leave.status.toLowerCase() == 'pending';
+    final style = _statusStyle(leave.status);
+    final hasReason = leave.reason.trim().isNotEmpty;
     final hasActions =
         isPending && (widget.onApprove != null || widget.onReject != null);
 
@@ -138,7 +142,7 @@ class _ExpenseCardState extends State<ExpenseCard>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title bar — employee + category + status chip
+                  // Title bar — employee + leave type + status chip
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
@@ -152,14 +156,14 @@ class _ExpenseCardState extends State<ExpenseCard>
                     child: Row(
                       children: [
                         Hero(
-                          tag: 'expense-avatar-${expense.id}',
+                          tag: 'leave-avatar-${leave.id}',
                           child: Material(
                             color: Colors.transparent,
                             child: CircleAvatar(
                               radius: 14,
                               backgroundColor: primaryLight,
                               child: Text(
-                                _avatarInitial(expense),
+                                _avatarInitial(leave),
                                 style: const TextStyle(
                                   color: primary,
                                   fontWeight: FontWeight.w800,
@@ -175,7 +179,7 @@ class _ExpenseCardState extends State<ExpenseCard>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                expense.employeeDisplayLabel,
+                                leave.employeeDisplayLabel,
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
@@ -184,14 +188,43 @@ class _ExpenseCardState extends State<ExpenseCard>
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 1),
-                              Text(
-                                expense.category,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: textMedium,
-                                ),
-                                overflow: TextOverflow.ellipsis,
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      leave.leaveType.isEmpty
+                                          ? 'Leave'
+                                          : leave.leaveType,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                        color: textMedium,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (leave.isHalfDay) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 1,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE9F0FF),
+                                        borderRadius: BorderRadius.circular(5),
+                                      ),
+                                      child: const Text(
+                                        'Half Day',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF2563EB),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ],
                           ),
@@ -206,7 +239,7 @@ class _ExpenseCardState extends State<ExpenseCard>
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            expense.status.toUpperCase(),
+                            leave.status.toUpperCase(),
                             style: TextStyle(
                               fontSize: 9.5,
                               fontWeight: FontWeight.w800,
@@ -226,16 +259,15 @@ class _ExpenseCardState extends State<ExpenseCard>
                       children: [
                         Expanded(
                           child: _GridCell(
-                            label: 'Employee Code',
-                            value: expense.employeeCode,
+                            label: 'Start Date',
+                            value: _formatDate(leave.startDate),
                           ),
                         ),
                         const VerticalDivider(width: 1, color: border),
                         Expanded(
                           child: _GridCell(
-                            label: 'Amount',
-                            value: '₹${_formatAmount(expense.amount)}',
-                            bold: true,
+                            label: 'End Date',
+                            value: _formatDate(leave.endDate),
                           ),
                         ),
                       ],
@@ -248,24 +280,26 @@ class _ExpenseCardState extends State<ExpenseCard>
                       children: [
                         Expanded(
                           child: _GridCell(
-                            label: 'Date',
-                            value: _formatDate(expense.expenseDate),
+                            label: 'Total Days',
+                            value: _formatDays(leave.totalDays),
+                            bold: true,
                           ),
                         ),
                         const VerticalDivider(width: 1, color: border),
                         Expanded(
                           child: _GridCell(
-                            label: 'Bill',
-                            value: hasBill ? 'Attached' : 'None',
-                            valueColor: hasBill ? textDark : textLight,
+                            label: 'Paid',
+                            value: leave.isPaid ? 'Yes' : 'No',
+                            valueColor:
+                            leave.isPaid ? textDark : textLight,
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  // Description — full-width row (only if present)
-                  if (hasDescription) ...[
+                  // Reason — full-width row (only if present)
+                  if (hasReason) ...[
                     const Divider(height: 1, color: border),
                     IntrinsicHeight(
                       child: Row(
@@ -282,7 +316,7 @@ class _ExpenseCardState extends State<ExpenseCard>
                               border: Border(right: BorderSide(color: border)),
                             ),
                             child: const Text(
-                              'Notes',
+                              'Reason',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
@@ -297,7 +331,7 @@ class _ExpenseCardState extends State<ExpenseCard>
                                 vertical: 8,
                               ),
                               child: Text(
-                                expense.description,
+                                leave.reason,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -385,12 +419,10 @@ class _ExpenseCardState extends State<ExpenseCard>
     );
   }
 
-  String _formatAmount(dynamic amount) {
-    final double value = amount is num
-        ? amount.toDouble()
-        : double.tryParse(amount.toString()) ?? 0;
-
-    return value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 2);
+  String _formatDays(double days) {
+    return days.truncateToDouble() == days
+        ? days.toStringAsFixed(0)
+        : days.toStringAsFixed(1);
   }
 
   String _formatDate(DateTime? date) {

@@ -14,6 +14,7 @@ import '../../employees/screens/add_employee_screen.dart';
 import '../../employees/screens/employee_details_screen.dart';
 import '../../calendar/screens/calendar_screen.dart';
 import '../../../../core/storage/secure_storage.dart';
+import '../../leaves/screens/leave_screen.dart';
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({
     super.key,
@@ -1852,8 +1853,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     title: 'Field GPS Tracking',
                   ),
                   _drawerItem(
-                    icon: Icons.event_note_outlined,
-                    title: 'Leave Requests',
+                    icon: Icons.event_available_outlined,
+                    title: 'Leaves',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const LeaveScreen(),
+                        ),
+                      );
+                    },
                   ),
                   _drawerItem(
                     icon: Icons.account_tree_outlined,

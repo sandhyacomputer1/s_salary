@@ -31,6 +31,11 @@ class ExpenseModel {
   final DateTime? actionedAt;
   final String approvedBy;
 
+  // Resolved separately from GET /employees, since the expenses API's
+  // employeeId object does not include a name field. Not part of the
+  // parsed JSON — set externally after fetching the employee list.
+  final String? resolvedEmployeeName;
+
   const ExpenseModel({
     required this.id,
     required this.employee,
@@ -46,6 +51,7 @@ class ExpenseModel {
     required this.updatedAt,
     required this.actionedAt,
     required this.approvedBy,
+    this.resolvedEmployeeName,
   });
 
   factory ExpenseModel.fromJson(Map<String, dynamic> json) {
@@ -86,6 +92,28 @@ class ExpenseModel {
     );
   }
 
+  /// Returns a copy of this expense with a resolved employee name attached
+  /// (looked up separately from GET /employees).
+  ExpenseModel copyWithResolvedName(String? name) {
+    return ExpenseModel(
+      id: id,
+      employee: employee,
+      companyId: companyId,
+      category: category,
+      amount: amount,
+      description: description,
+      billUrl: billUrl,
+      expenseDate: expenseDate,
+      status: status,
+      submittedAt: submittedAt,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      actionedAt: actionedAt,
+      approvedBy: approvedBy,
+      resolvedEmployeeName: name,
+    );
+  }
+
   static double _toDouble(dynamic value) {
     if (value == null) {
       return 0;
@@ -118,6 +146,18 @@ class ExpenseModel {
     }
 
     return employee!.employeeCode;
+  }
+
+  /// Best available display label for the employee:
+  /// prefers the resolved name (from GET /employees), else falls
+  /// back to the employee code.
+  String get employeeDisplayLabel {
+    if (resolvedEmployeeName != null &&
+        resolvedEmployeeName!.trim().isNotEmpty) {
+      return resolvedEmployeeName!;
+    }
+
+    return employeeCode;
   }
 
   bool get isPending {
