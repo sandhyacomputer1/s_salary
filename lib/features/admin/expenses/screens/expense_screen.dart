@@ -27,6 +27,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   static const Color textMedium = Color(0xFF4B5563);
   static const Color textLight = Color(0xFF8A93A1);
   static const Color border = Color(0xFFE1E5EA);
+  static const Color danger = Color(0xFFD64545);
 
   @override
   void initState() {
@@ -53,10 +54,14 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       if (!mounted) return;
 
       setState(() {
-        _error = e.toString();
+        _error = _errorText(e);
         _isLoading = false;
       });
     }
+  }
+
+  String _errorText(Object e) {
+    return e.toString().replaceFirst('Exception: ', '');
   }
 
   List<ExpenseModel> get _filteredExpenses {
@@ -100,11 +105,12 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     );
   }
 
-  Future<void> _approveExpense(ExpenseModel expense) async {
+  // Returns true when the API call succeeded.
+  Future<bool> _approveExpense(ExpenseModel expense) async {
     try {
       await _service.approveExpense(expense.id);
 
-      if (!mounted) return;
+      if (!mounted) return false;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -113,20 +119,75 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       );
 
       await _loadExpenses();
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to approve expense: $e'),
+          content: Text('Failed to approve expense: ${_errorText(e)}'),
         ),
       );
+      return false;
     }
   }
 
-  // NOTE: Rejection is intentionally NOT wired up — there is no
-  // reject endpoint in the API spec (/expenses/:id/reject does not
-  // exist). Provide that endpoint and this can be added back.
+  Future<bool> _confirmReject(ExpenseModel expense) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reject expense?'),
+        content: Text(
+          'Reject the ₹${_formatAmount(expense.amount)} claim from '
+              '${expense.employeeCode}? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: danger),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+
+    return confirmed ?? false;
+  }
+
+  // Returns true only when the user confirmed AND the API call succeeded.
+  Future<bool> _rejectExpense(ExpenseModel expense) async {
+    final confirmed = await _confirmReject(expense);
+
+    if (!confirmed || !mounted) return false;
+
+    try {
+      await _service.rejectExpense(expense.id);
+
+      if (!mounted) return false;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Expense rejected'),
+        ),
+      );
+
+      await _loadExpenses();
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to reject expense: ${_errorText(e)}'),
+        ),
+      );
+      return false;
+    }
+  }
 
   void _openDetails(ExpenseModel expense) async {
     await Navigator.push(
@@ -134,9 +195,8 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       MaterialPageRoute(
         builder: (_) => ExpenseDetailsScreen(
           expense: expense,
-          onApprove: () async {
-            await _approveExpense(expense);
-          },
+          onApprove: () => _approveExpense(expense),
+          onReject: () => _rejectExpense(expense),
         ),
       ),
     );
@@ -312,7 +372,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           value: '$_rejectedCount',
           icon: Icons.cancel_outlined,
           iconBackground: const Color(0xFFFFE8E8),
-          iconColor: const Color(0xFFD64545),
+          iconColor: danger,
         ),
         _SummaryCard(
           title: 'Total Amount',
@@ -460,6 +520,9 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
             onTap: () => _openDetails(expenses[i]),
             onApprove: expenses[i].status.toLowerCase() == 'pending'
                 ? () => _approveExpense(expenses[i])
+                : null,
+            onReject: expenses[i].status.toLowerCase() == 'pending'
+                ? () => _rejectExpense(expenses[i])
                 : null,
           ),
       ],

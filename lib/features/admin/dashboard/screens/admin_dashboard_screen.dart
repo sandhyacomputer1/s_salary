@@ -13,6 +13,7 @@ import '../../shift_roster/screens/shift_roster_screen.dart';
 import '../../employees/screens/add_employee_screen.dart';
 import '../../employees/screens/employee_details_screen.dart';
 import '../../calendar/screens/calendar_screen.dart';
+import '../../../../core/storage/secure_storage.dart';
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({
     super.key,
@@ -2043,11 +2044,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // LOGOUT
   // ==========================================================
 
-  void _logout() {
+  Future<void> _logout() async {
+    // Close drawer
     Navigator.pop(context);
 
-    // Authentication logout will be
-    // connected to SecureStorage later.
+    // Clear complete login session
+    await SecureStorage.clearSession();
+
+    if (!mounted) {
+      return;
+    }
+
+    // Remove all previous routes and open Login
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      AppRoutes.login,
+          (route) => false,
+    );
   }
 
   // ==========================================================

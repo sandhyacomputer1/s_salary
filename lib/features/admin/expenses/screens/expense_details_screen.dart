@@ -5,74 +5,54 @@ import '../models/expense_model.dart';
 
 class ExpenseDetailsScreen extends StatefulWidget {
   final ExpenseModel expense;
-  final Future<void> Function()? onApprove;
+
+  // Each callback returns true when the action succeeded.
+  final Future<bool> Function()? onApprove;
+  final Future<bool> Function()? onReject;
 
   const ExpenseDetailsScreen({
     super.key,
     required this.expense,
     this.onApprove,
+    this.onReject,
   });
 
   @override
   State<ExpenseDetailsScreen> createState() => _ExpenseDetailsScreenState();
 }
 
-class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen>
-    with SingleTickerProviderStateMixin {
+class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen> {
   static const Color primary = Color(0xFFE96832);
+  static const Color primaryLight = Color(0xFFFFEEE7);
+  static const Color danger = Color(0xFFD64545);
   static const Color textDark = Color(0xFF18212F);
   static const Color textMedium = Color(0xFF4B5563);
-  static const Color textLight = Color(0xFF8A93A1);
   static const Color border = Color(0xFFE1E5EA);
+  static const Color tableHeaderBg = Color(0xFFF7F8FA);
 
-  late final AnimationController _controller;
+  bool _approving = false;
+  bool _rejecting = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 650),
-    )..forward();
-  }
+  bool get _busy => _approving || _rejecting;
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Animation<double> _fadeFor(double start, double end) {
-    return CurvedAnimation(
-      parent: _controller,
-      curve: Interval(start, end, curve: Curves.easeOut),
-    );
-  }
-
-  Animation<Offset> _slideFor(double start, double end) {
-    return Tween<Offset>(
-      begin: const Offset(0, 0.05),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Interval(start, end, curve: Curves.easeOutCubic),
-      ),
-    );
-  }
-
-  Widget _animatedSection({
-    required double start,
-    required double end,
-    required Widget child,
-  }) {
-    return FadeTransition(
-      opacity: _fadeFor(start, end),
-      child: SlideTransition(
-        position: _slideFor(start, end),
-        child: child,
-      ),
-    );
+  _StatusStyle _statusStyle(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return const _StatusStyle(
+          accent: Color(0xFF159957),
+          background: Color(0xFFE7F7EF),
+        );
+      case 'rejected':
+        return const _StatusStyle(
+          accent: danger,
+          background: Color(0xFFFFE8E8),
+        );
+      default:
+        return const _StatusStyle(
+          accent: primary,
+          background: primaryLight,
+        );
+    }
   }
 
   Future<void> _openBill(BuildContext context) async {
@@ -80,9 +60,7 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen>
 
     if (url.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No bill attached to this expense'),
-        ),
+        const SnackBar(content: Text('No bill attached to this expense')),
       );
       return;
     }
@@ -90,34 +68,47 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen>
     final uri = Uri.tryParse(url);
 
     if (uri == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid bill URL'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Invalid bill URL')));
       return;
     }
 
-    final launched = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
 
     if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open bill'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Could not open bill')));
     }
   }
 
   Future<void> _approve(BuildContext context) async {
-    if (widget.onApprove == null) return;
+    if (widget.onApprove == null || _busy) return;
 
-    await widget.onApprove!();
+    setState(() => _approving = true);
 
-    if (context.mounted) {
+    final success = await widget.onApprove!();
+
+    if (!mounted) return;
+
+    setState(() => _approving = false);
+
+    if (success) {
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _reject(BuildContext context) async {
+    if (widget.onReject == null || _busy) return;
+
+    setState(() => _rejecting = true);
+
+    final success = await widget.onReject!();
+
+    if (!mounted) return;
+
+    setState(() => _rejecting = false);
+
+    if (success) {
       Navigator.pop(context);
     }
   }
@@ -127,6 +118,9 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen>
     final expense = widget.expense;
     final isPending = expense.status.toLowerCase() == 'pending';
     final hasBill = expense.billUrl.trim().isNotEmpty;
+    final style = _statusStyle(expense.status);
+    final hasActions =
+        isPending && (widget.onApprove != null || widget.onReject != null);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
@@ -134,248 +128,279 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen>
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         elevation: 0,
+        centerTitle: false,
         title: const Text(
           'Expense Details',
           style: TextStyle(
             color: textDark,
             fontWeight: FontWeight.w700,
+            fontSize: 17,
           ),
         ),
-        iconTheme: const IconThemeData(
-          color: textDark,
-        ),
+        iconTheme: const IconThemeData(color: textDark),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 850,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _animatedSection(
-                  start: 0.0,
-                  end: 0.45,
-                  child: _buildTopCard(expense),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Compact header strip
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: border),
                 ),
-                const SizedBox(height: 16),
-                _animatedSection(
-                  start: 0.1,
-                  end: 0.55,
-                  child: _buildExpenseInformation(expense),
+                child: Row(
+                  children: [
+                    Hero(
+                      tag: 'expense-avatar-${expense.id}',
+                      child: Material(
+                        color: Colors.transparent,
+                        child: CircleAvatar(
+                          radius: 24,
+                          backgroundColor: primaryLight,
+                          child: Text(
+                            expense.employeeCode == '—'
+                                ? '?'
+                                : expense.employeeCode
+                                .replaceAll('EMP-', '')
+                                .characters
+                                .first,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: primary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            expense.category,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: textDark,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            expense.employeeCode,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: textMedium,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '₹${expense.amount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: textDark,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: style.background,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            expense.status.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              color: style.accent,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                _animatedSection(
-                  start: 0.2,
-                  end: 0.65,
-                  child: _buildTimeline(expense),
-                ),
-                if (hasBill) ...[
-                  const SizedBox(height: 16),
-                  _animatedSection(
-                    start: 0.3,
-                    end: 0.75,
-                    child: _buildBillCard(context, expense),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Expense Information table
+              _TableCard(
+                title: 'Expense Information',
+                icon: Icons.receipt_long_outlined,
+                rows: [
+                  _TableRow('Category', expense.category),
+                  _TableRow('Amount', '₹${expense.amount.toStringAsFixed(2)}'),
+                  _TableRow('Expense Date', _formatDate(expense.expenseDate)),
+                  _TableRow('Status', expense.status),
+                  _TableRow(
+                    'Description',
+                    expense.description.isEmpty
+                        ? 'No description provided'
+                        : expense.description,
                   ),
                 ],
-                if (isPending && widget.onApprove != null) ...[
-                  const SizedBox(height: 20),
-                  _animatedSection(
-                    start: 0.4,
-                    end: 0.9,
-                    child: _buildActions(context),
-                  ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Timeline table
+              _TableCard(
+                title: 'Timeline',
+                icon: Icons.timeline_rounded,
+                rows: [
+                  _TableRow('Submitted At', _formatDateTime(expense.submittedAt)),
+                  _TableRow('Created At', _formatDateTime(expense.createdAt)),
+                  if (expense.actionedAt != null)
+                    _TableRow('Actioned At', _formatDateTime(expense.actionedAt)),
+                  if (expense.approvedBy.trim().isNotEmpty)
+                    _TableRow(
+                      expense.isRejected ? 'Rejected By' : 'Approved By',
+                      expense.approvedBy,
+                    ),
                 ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopCard(ExpenseModel expense) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: border),
-      ),
-      child: Row(
-        children: [
-          Hero(
-            tag: 'expense-avatar-${expense.id}',
-            child: Material(
-              color: Colors.transparent,
-              child: CircleAvatar(
-                radius: 28,
-                backgroundColor: const Color(0xFFFFEEE7),
-                child: Text(
-                  expense.employeeCode == '—'
-                      ? '?'
-                      : expense.employeeCode
-                      .replaceAll('EMP-', '')
-                      .characters
-                      .first,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: primary,
-                  ),
-                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Employee Expense Claim',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: textLight,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  expense.employeeCode,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: textDark,
+
+              if (hasBill) ...[
+                const SizedBox(height: 16),
+                _TableCard(
+                  title: 'Supporting Document',
+                  icon: Icons.description_outlined,
+                  rows: const [
+                    _TableRow('Bill', 'Attached'),
+                  ],
+                  trailingAction: TextButton.icon(
+                    onPressed: () => _openBill(context),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 15),
+                    label: const Text('View Bill'),
+                    style: TextButton.styleFrom(foregroundColor: primary),
                   ),
                 ),
               ],
-            ),
+
+              // Space for the bottom action bar
+              if (hasActions)
+                const SizedBox(height: 90)
+              else
+                const SizedBox(height: 16),
+            ],
           ),
-          _StatusBadge(status: expense.status),
-        ],
+        ),
       ),
-    );
-  }
-
-  Widget _buildExpenseInformation(ExpenseModel expense) {
-    return _SectionCard(
-      title: 'Expense Information',
-      icon: Icons.receipt_long_outlined,
-      children: [
-        _DetailRow(label: 'Employee Code', value: expense.employeeCode),
-        _DetailRow(label: 'Category', value: expense.category),
-        _DetailRow(
-          label: 'Amount',
-          value: '₹${expense.amount.toStringAsFixed(2)}',
-          valueBold: true,
-        ),
-        _DetailRow(
-          label: 'Expense Date',
-          value: _formatDate(expense.expenseDate),
-        ),
-        _DetailRow(label: 'Status', value: expense.status),
-        _DetailRow(
-          label: 'Description',
-          value: expense.description.isEmpty
-              ? 'No description provided'
-              : expense.description,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTimeline(ExpenseModel expense) {
-    return _SectionCard(
-      title: 'Expense Timeline',
-      icon: Icons.timeline_rounded,
-      children: [
-        _DetailRow(
-          label: 'Submitted At',
-          value: _formatDateTime(expense.submittedAt),
-        ),
-        _DetailRow(
-          label: 'Created At',
-          value: _formatDateTime(expense.createdAt),
-        ),
-        if (expense.actionedAt != null)
-          _DetailRow(
-            label: 'Actioned At',
-            value: _formatDateTime(expense.actionedAt),
+      // Footer action bar
+      bottomNavigationBar: hasActions
+          ? SafeArea(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: border)),
           ),
-        if (expense.approvedBy.trim().isNotEmpty)
-          _DetailRow(
-            label: 'Approved / Actioned By',
-            value: expense.approvedBy,
-          ),
-      ],
-    );
-  }
-
-  Widget _buildBillCard(BuildContext context, ExpenseModel expense) {
-    return _SectionCard(
-      title: 'Supporting Bill',
-      icon: Icons.description_outlined,
-      children: [
-        Row(
-          children: [
-            const Icon(
-              Icons.attach_file_rounded,
-              color: primary,
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'Bill / supporting document attached',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: textDark,
+          child: Row(
+            children: [
+              if (widget.onReject != null)
+                Expanded(
+                  child: SizedBox(
+                    height: 50,
+                    child: OutlinedButton(
+                      onPressed: _busy ? null : () => _reject(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: danger,
+                        side: BorderSide(
+                          color: danger.withValues(alpha: 0.5),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                      ),
+                      child: _rejecting
+                          ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: danger,
+                        ),
+                      )
+                          : const Text(
+                        'Reject',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: () => _openBill(context),
-              icon: const Icon(
-                Icons.open_in_new_rounded,
-                size: 16,
-              ),
-              label: const Text('Open Bill'),
-            ),
-          ],
+              if (widget.onReject != null && widget.onApprove != null)
+                const SizedBox(width: 12),
+              if (widget.onApprove != null)
+                Expanded(
+                  child: SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _busy ? null : () => _approve(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                      ),
+                      child: _approving
+                          ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: Colors.white,
+                        ),
+                      )
+                          : const Text(
+                        'Approve',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildActions(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton.icon(
-        onPressed: () => _approve(context),
-        icon: const Icon(Icons.check_rounded),
-        label: const Text('Approve Expense'),
-        style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFF159957),
-          padding: const EdgeInsets.symmetric(vertical: 15),
-        ),
-      ),
+      )
+          : null,
     );
   }
 
   String _formatDate(DateTime? date) {
     if (date == null) return '-';
-
-    return '${date.day.toString().padLeft(2, '0')} '
-        '${_month(date.month)} ${date.year}';
+    return '${date.day.toString().padLeft(2, '0')} ${_month(date.month)} ${date.year}';
   }
 
   String _formatDateTime(DateTime? date) {
     if (date == null) return '-';
-
-    return '${_formatDate(date)} '
-        '${date.hour.toString().padLeft(2, '0')}:'
-        '${date.minute.toString().padLeft(2, '0')}';
+    return '${_formatDate(date)} · ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
   String _month(int month) {
@@ -383,150 +408,134 @@ class _ExpenseDetailsScreenState extends State<ExpenseDetailsScreen>
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-
     return months[month - 1];
   }
 }
 
-class _SectionCard extends StatelessWidget {
+class _StatusStyle {
+  final Color accent;
+  final Color background;
+
+  const _StatusStyle({required this.accent, required this.background});
+}
+
+class _TableRow {
+  final String label;
+  final String value;
+
+  const _TableRow(this.label, this.value);
+}
+
+class _TableCard extends StatelessWidget {
   final String title;
   final IconData icon;
-  final List<Widget> children;
+  final List<_TableRow> rows;
+  final Widget? trailingAction;
 
-  const _SectionCard({
+  const _TableCard({
     required this.title,
     required this.icon,
-    required this.children,
+    required this.rows,
+    this.trailingAction,
   });
+
+  static const Color primary = Color(0xFFE96832);
+  static const Color textDark = Color(0xFF18212F);
+  static const Color textMedium = Color(0xFF4B5563);
+  static const Color border = Color(0xFFE1E5EA);
+  static const Color tableHeaderBg = Color(0xFFF7F8FA);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFE1E5EA),
-        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: const Color(0xFFE96832),
+          // Table title bar
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: const BoxDecoration(
+              color: tableHeaderBg,
+              border: Border(bottom: BorderSide(color: border)),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: textDark,
+                    ),
+                  ),
+                ),
+                if (trailingAction != null) trailingAction!,
+              ],
+            ),
+          ),
+          // Table rows
+          for (int i = 0; i < rows.length; i++)
+            Container(
+              decoration: BoxDecoration(
+                border: i == rows.length - 1
+                    ? null
+                    : const Border(bottom: BorderSide(color: border)),
               ),
-              const SizedBox(width: 9),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF18212F),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      width: 140,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: tableHeaderBg,
+                        border: Border(right: BorderSide(color: border)),
+                      ),
+                      child: Text(
+                        rows[i].label,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: textMedium,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        child: Text(
+                          rows[i].value,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: textDark,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          ...children,
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool valueBold;
-
-  const _DetailRow({
-    required this.label,
-    required this.value,
-    this.valueBold = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 155,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 12.5,
-                color: Color(0xFF8A93A1),
-              ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: valueBold ? FontWeight.w800 : FontWeight.w600,
-                color: const Color(0xFF18212F),
-              ),
-            ),
-          ),
         ],
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final String status;
-
-  const _StatusBadge({
-    required this.status,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final normalized = status.toLowerCase();
-
-    final isApproved = normalized == 'approved';
-    final isRejected = normalized == 'rejected';
-
-    final background = isApproved
-        ? const Color(0xFFE7F7EF)
-        : isRejected
-        ? const Color(0xFFFFE8E8)
-        : const Color(0xFFFFF4D6);
-
-    final foreground = isApproved
-        ? const Color(0xFF159957)
-        : isRejected
-        ? const Color(0xFFD64545)
-        : const Color(0xFFD99000);
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 11,
-        vertical: 6,
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(
-          fontSize: 10.5,
-          fontWeight: FontWeight.w800,
-          color: foreground,
-        ),
       ),
     );
   }

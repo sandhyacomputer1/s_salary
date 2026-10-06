@@ -55,15 +55,37 @@ class ExpenseService {
 
   // ============================================================
   // APPROVE EXPENSE
+  // PUT /expenses/:id/status  Body: {"status": "approved"}
   // ============================================================
 
   Future<void> approveExpense(
       String expenseId,
       ) async {
     await _apiClient.put(
-      ExpenseEndpoints.approveExpense(
+      ExpenseEndpoints.updateStatus(
         expenseId,
       ),
+      body: {
+        'status': 'approved',
+      },
+    );
+  }
+
+  // ============================================================
+  // REJECT EXPENSE
+  // PUT /expenses/:id/status  Body: {"status": "rejected"}
+  // ============================================================
+
+  Future<void> rejectExpense(
+      String expenseId,
+      ) async {
+    await _apiClient.put(
+      ExpenseEndpoints.updateStatus(
+        expenseId,
+      ),
+      body: {
+        'status': 'rejected',
+      },
     );
   }
 }

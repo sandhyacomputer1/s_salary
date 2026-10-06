@@ -14,10 +14,12 @@ class ExpenseEndpoints {
   static const String createExpense = '/expenses';
 
   // ============================================================
-  // PUT /expenses/:id/approve
+  // PUT /expenses/:id/status
+  // Body: {"status": "approved" | "rejected"}
+  // Used for BOTH approve and reject.
   // ============================================================
 
-  static String approveExpense(String id) {
-    return '/expenses/$id/approve';
+  static String updateStatus(String id) {
+    return '/expenses/$id/status';
   }
 }
