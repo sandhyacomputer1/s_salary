@@ -25,8 +25,9 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isLoading = false;
 
   // ============================
-  // THEME COLORS (matches web dashboard)
+  // THEME COLORS
   // ============================
+
   static const Color kOrange = Color(0xFFFF6B2C);
   static const Color kOrangeDark = Color(0xFFE85A1A);
   static const Color kBlack = Color(0xFF1C1C1E);
@@ -34,7 +35,10 @@ class _LoginScreenState extends State<LoginScreen>
   static const Color kBgWhite = Color(0xFFFAFAFA);
   static const Color kCardBorder = Color(0xFFEDEDED);
 
-  // Staggered entrance controller
+  // ============================
+  // ENTRANCE ANIMATION
+  // ============================
+
   late final AnimationController _entranceController;
 
   late final Animation<double> _logoScale;
@@ -50,11 +54,17 @@ class _LoginScreenState extends State<LoginScreen>
 
   late final Animation<double> _footerFade;
 
-  // Continuous gentle pulse for the logo badge
+  // ============================
+  // LOGO PULSE
+  // ============================
+
   late final AnimationController _pulseController;
   late final Animation<double> _pulseScale;
 
-  // Field focus scale animations
+  // ============================
+  // FIELD FOCUS ANIMATIONS
+  // ============================
+
   double _emailFieldScale = 1.0;
   double _passwordFieldScale = 1.0;
 
@@ -62,80 +72,146 @@ class _LoginScreenState extends State<LoginScreen>
   void initState() {
     super.initState();
 
+    // ============================
+    // ENTRANCE CONTROLLER
+    // ============================
+
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1300),
     );
 
-    _logoScale = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _entranceController,
-        curve: const Interval(0.0, 0.45, curve: Curves.elasticOut),
-      ),
-    );
+    _logoScale =
+        Tween<double>(
+          begin: 0.5,
+          end: 1.0,
+        ).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: const Interval(
+              0.0,
+              0.45,
+              curve: Curves.elasticOut,
+            ),
+          ),
+        );
+
     _logoFade = CurvedAnimation(
       parent: _entranceController,
-      curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
+      curve: const Interval(
+        0.0,
+        0.3,
+        curve: Curves.easeOut,
+      ),
     );
 
     _titleFade = CurvedAnimation(
       parent: _entranceController,
-      curve: const Interval(0.20, 0.5, curve: Curves.easeOut),
-    );
-    _titleSlide = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _entranceController,
-        curve: const Interval(0.20, 0.5, curve: Curves.easeOutCubic),
+      curve: const Interval(
+        0.20,
+        0.5,
+        curve: Curves.easeOut,
       ),
     );
 
+    _titleSlide =
+        Tween<Offset>(
+          begin: const Offset(0, 0.3),
+          end: Offset.zero,
+        ).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: const Interval(
+              0.20,
+              0.5,
+              curve: Curves.easeOutCubic,
+            ),
+          ),
+        );
+
     _subtitleFade = CurvedAnimation(
       parent: _entranceController,
-      curve: const Interval(0.35, 0.6, curve: Curves.easeOut),
+      curve: const Interval(
+        0.35,
+        0.6,
+        curve: Curves.easeOut,
+      ),
     );
 
     _cardFade = CurvedAnimation(
       parent: _entranceController,
-      curve: const Interval(0.45, 0.85, curve: Curves.easeOut),
-    );
-    _cardSlide = Tween<Offset>(
-      begin: const Offset(0, 0.15),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _entranceController,
-        curve: const Interval(0.45, 0.85, curve: Curves.easeOutCubic),
+      curve: const Interval(
+        0.45,
+        0.85,
+        curve: Curves.easeOut,
       ),
     );
 
+    _cardSlide =
+        Tween<Offset>(
+          begin: const Offset(0, 0.15),
+          end: Offset.zero,
+        ).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: const Interval(
+              0.45,
+              0.85,
+              curve: Curves.easeOutCubic,
+            ),
+          ),
+        );
+
     _footerFade = CurvedAnimation(
       parent: _entranceController,
-      curve: const Interval(0.75, 1.0, curve: Curves.easeOut),
+      curve: const Interval(
+        0.75,
+        1.0,
+        curve: Curves.easeOut,
+      ),
     );
 
     _entranceController.forward();
+
+    // ============================
+    // PULSE CONTROLLER
+    // ============================
 
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
 
-    _pulseScale = Tween<double>(begin: 0.96, end: 1.06).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
+    _pulseScale =
+        Tween<double>(
+          begin: 0.96,
+          end: 1.06,
+        ).animate(
+          CurvedAnimation(
+            parent: _pulseController,
+            curve: Curves.easeInOut,
+          ),
+        );
+
+    // ============================
+    // EMAIL FOCUS
+    // ============================
 
     _emailFocus.addListener(() {
       setState(() {
-        _emailFieldScale = _emailFocus.hasFocus ? 1.02 : 1.0;
+        _emailFieldScale =
+        _emailFocus.hasFocus ? 1.02 : 1.0;
       });
     });
 
+    // ============================
+    // PASSWORD FOCUS
+    // ============================
+
     _passwordFocus.addListener(() {
       setState(() {
-        _passwordFieldScale = _passwordFocus.hasFocus ? 1.02 : 1.0;
+        _passwordFieldScale =
+        _passwordFocus.hasFocus ? 1.02 : 1.0;
       });
     });
   }
@@ -144,12 +220,19 @@ class _LoginScreenState extends State<LoginScreen>
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+
     _emailFocus.dispose();
     _passwordFocus.dispose();
+
     _entranceController.dispose();
     _pulseController.dispose();
+
     super.dispose();
   }
+
+  // ============================================================
+  // LOGIN
+  // ============================================================
 
   Future<void> _login() async {
     final email = _emailController.text.trim();
@@ -187,9 +270,9 @@ class _LoginScreenState extends State<LoginScreen>
       final require2FA =
           data['require2FA'] == true;
 
-      // ============================
+      // ========================================================
       // 2FA REQUIRED
-      // ============================
+      // ========================================================
 
       if (require2FA) {
         final tempToken =
@@ -221,9 +304,9 @@ class _LoginScreenState extends State<LoginScreen>
         return;
       }
 
-      // ============================
+      // ========================================================
       // NORMAL LOGIN
-      // ============================
+      // ========================================================
 
       await _saveUserSession(data);
 
@@ -265,16 +348,18 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  // ============================================================
+  // SAVE USER SESSION
+  // ============================================================
+
   Future<void> _saveUserSession(
       Map<String, dynamic> data,
       ) async {
-    final user =
-    Map<String, dynamic>.from(
+    final user = Map<String, dynamic>.from(
       data['user'] ?? {},
     );
 
-    final tokens =
-    Map<String, dynamic>.from(
+    final tokens = Map<String, dynamic>.from(
       data['tokens'] ?? {},
     );
 
@@ -292,6 +377,15 @@ class _LoginScreenState extends State<LoginScreen>
 
     final companyId =
     user['companyId']?.toString();
+
+    // Employee ID is required for:
+    // GET /attendance/employee/{employeeId}
+    final employeeId =
+    user['employeeId']?.toString();
+
+    // ==========================================================
+    // VALIDATION
+    // ==========================================================
 
     if (accessToken == null ||
         accessToken.isEmpty) {
@@ -321,14 +415,33 @@ class _LoginScreenState extends State<LoginScreen>
       );
     }
 
+    // Employee users must have employeeId
+    // because attendance API requires it.
+    if (role.toLowerCase() == 'employee' &&
+        (employeeId == null ||
+            employeeId.isEmpty)) {
+      throw Exception(
+        'Employee ID was not received.',
+      );
+    }
+
+    // ==========================================================
+    // SAVE SESSION
+    // ==========================================================
+
     await SecureStorage.saveLoginSession(
       accessToken: accessToken,
       refreshToken: refreshToken,
       userId: userId,
       role: role,
       companyId: companyId,
+      employeeId: employeeId,
     );
   }
+
+  // ============================================================
+  // ROLE-BASED DASHBOARD
+  // ============================================================
 
   Future<void> _goToDashboard(
       String? role,
@@ -351,6 +464,10 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  // ============================================================
+  // FIELD DECORATION
+  // ============================================================
+
   InputDecoration _fieldDecoration({
     required String label,
     required String hint,
@@ -364,29 +481,50 @@ class _LoginScreenState extends State<LoginScreen>
         color: kGrey,
         fontWeight: FontWeight.w500,
       ),
-      hintStyle: TextStyle(color: kGrey.withOpacity(0.6)),
-      prefixIcon: Icon(icon, color: kGrey, size: 20),
+      hintStyle: TextStyle(
+        color: kGrey.withOpacity(0.6),
+      ),
+      prefixIcon: Icon(
+        icon,
+        color: kGrey,
+        size: 20,
+      ),
       suffixIcon: suffixIcon,
       filled: true,
       fillColor: kBgWhite,
-      contentPadding: const EdgeInsets.symmetric(
+      contentPadding:
+      const EdgeInsets.symmetric(
         vertical: 16,
         horizontal: 16,
       ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: kCardBorder),
+        borderRadius:
+        BorderRadius.circular(12),
+        borderSide: const BorderSide(
+          color: kCardBorder,
+        ),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: kCardBorder),
+        borderRadius:
+        BorderRadius.circular(12),
+        borderSide: const BorderSide(
+          color: kCardBorder,
+        ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: kOrange, width: 1.6),
+        borderRadius:
+        BorderRadius.circular(12),
+        borderSide: const BorderSide(
+          color: kOrange,
+          width: 1.6,
+        ),
       ),
     );
   }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -395,68 +533,108 @@ class _LoginScreenState extends State<LoginScreen>
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding:
+            const EdgeInsets.all(24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
+              constraints:
+              const BoxConstraints(
+                maxWidth: 420,
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment:
+                CrossAxisAlignment.stretch,
                 children: [
-                  // ============================
-                  // LOGO ROW — scale/fade in, then gentle infinite pulse
-                  // ============================
+                  // ==================================================
+                  // LOGO ROW
+                  // ==================================================
+
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisAlignment:
+                    MainAxisAlignment.center,
                     children: [
                       FadeTransition(
                         opacity: _logoFade,
                         child: ScaleTransition(
                           scale: _logoScale,
                           child: AnimatedBuilder(
-                            animation: _pulseScale,
-                            builder: (context, child) {
+                            animation:
+                            _pulseScale,
+                            builder:
+                                (context, child) {
                               return Transform.scale(
-                                scale: _pulseScale.value,
+                                scale:
+                                _pulseScale.value,
                                 child: child,
                               );
                             },
                             child: Container(
                               height: 46,
                               width: 46,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                gradient: const LinearGradient(
-                                  colors: [kOrange, kOrangeDark],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
+                              decoration:
+                              BoxDecoration(
+                                borderRadius:
+                                BorderRadius
+                                    .circular(
+                                  12,
+                                ),
+                                gradient:
+                                const LinearGradient(
+                                  colors: [
+                                    kOrange,
+                                    kOrangeDark,
+                                  ],
+                                  begin:
+                                  Alignment
+                                      .topLeft,
+                                  end:
+                                  Alignment
+                                      .bottomRight,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: kOrange.withOpacity(0.35),
+                                    color: kOrange
+                                        .withOpacity(
+                                      0.35,
+                                    ),
                                     blurRadius: 18,
-                                    offset: const Offset(0, 8),
+                                    offset:
+                                    const Offset(
+                                      0,
+                                      8,
+                                    ),
                                   ),
                                 ],
                               ),
-                              alignment: Alignment.center,
-                              child: const Icon(
-                                Icons.bolt_rounded,
-                                color: Colors.white,
+                              alignment:
+                              Alignment.center,
+                              child:
+                              const Icon(
+                                Icons
+                                    .bolt_rounded,
+                                color:
+                                Colors.white,
                                 size: 26,
                               ),
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(
+                        width: 12,
+                      ),
                       FadeTransition(
                         opacity: _titleFade,
-                        child: SlideTransition(
-                          position: _titleSlide,
+                        child:
+                        SlideTransition(
+                          position:
+                          _titleSlide,
                           child: const Text(
                             'S Salary',
                             style: TextStyle(
                               fontSize: 24,
-                              fontWeight: FontWeight.w800,
+                              fontWeight:
+                              FontWeight
+                                  .w800,
                               color: kBlack,
                               letterSpacing: 0.1,
                             ),
@@ -468,11 +646,17 @@ class _LoginScreenState extends State<LoginScreen>
 
                   const SizedBox(height: 10),
 
+                  // ==================================================
+                  // SUBTITLE
+                  // ==================================================
+
                   FadeTransition(
-                    opacity: _subtitleFade,
+                    opacity:
+                    _subtitleFade,
                     child: Text(
                       'Sign in to your dashboard',
-                      textAlign: TextAlign.center,
+                      textAlign:
+                      TextAlign.center,
                       style: TextStyle(
                         fontSize: 14,
                         color: kGrey,
@@ -482,127 +666,236 @@ class _LoginScreenState extends State<LoginScreen>
 
                   const SizedBox(height: 32),
 
-                  // ============================
-                  // FLAT CARD — fades and slides up after the header
-                  // ============================
+                  // ==================================================
+                  // LOGIN CARD
+                  // ==================================================
+
                   FadeTransition(
                     opacity: _cardFade,
-                    child: SlideTransition(
+                    child:
+                    SlideTransition(
                       position: _cardSlide,
                       child: Container(
                         padding:
-                        const EdgeInsets.fromLTRB(24, 28, 24, 24),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: kCardBorder),
+                        const EdgeInsets
+                            .fromLTRB(
+                          24,
+                          28,
+                          24,
+                          24,
+                        ),
+                        decoration:
+                        BoxDecoration(
+                          color:
+                          Colors.white,
+                          borderRadius:
+                          BorderRadius
+                              .circular(
+                            20,
+                          ),
+                          border:
+                          Border.all(
+                            color:
+                            kCardBorder,
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
+                              color: Colors
+                                  .black
+                                  .withOpacity(
+                                0.04,
+                              ),
                               blurRadius: 24,
-                              offset: const Offset(0, 10),
+                              offset:
+                              const Offset(
+                                0,
+                                10,
+                              ),
                             ),
                           ],
                         ),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          crossAxisAlignment:
+                          CrossAxisAlignment
+                              .stretch,
                           children: [
                             const Text(
                               'Email',
-                              style: TextStyle(
+                              style:
+                              TextStyle(
                                 fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                                fontWeight:
+                                FontWeight
+                                    .w600,
                                 color: kGrey,
-                                letterSpacing: 0.6,
+                                letterSpacing:
+                                0.6,
                               ),
                             ),
-                            const SizedBox(height: 6),
+
+                            const SizedBox(
+                              height: 6,
+                            ),
+
                             AnimatedScale(
-                              scale: _emailFieldScale,
-                              duration: const Duration(milliseconds: 180),
-                              curve: Curves.easeOut,
-                              child: TextField(
-                                controller: _emailController,
-                                focusNode: _emailFocus,
-                                keyboardType: TextInputType.emailAddress,
-                                style: const TextStyle(
-                                  color: kBlack,
-                                  fontWeight: FontWeight.w500,
+                              scale:
+                              _emailFieldScale,
+                              duration:
+                              const Duration(
+                                milliseconds:
+                                180,
+                              ),
+                              curve:
+                              Curves.easeOut,
+                              child:
+                              TextField(
+                                controller:
+                                _emailController,
+                                focusNode:
+                                _emailFocus,
+                                keyboardType:
+                                TextInputType
+                                    .emailAddress,
+                                style:
+                                const TextStyle(
+                                  color:
+                                  kBlack,
+                                  fontWeight:
+                                  FontWeight
+                                      .w500,
                                 ),
-                                cursorColor: kOrange,
-                                decoration: _fieldDecoration(
+                                cursorColor:
+                                kOrange,
+                                decoration:
+                                _fieldDecoration(
                                   label: '',
-                                  hint: 'Enter your email',
-                                  icon: Icons.mail_outline_rounded,
+                                  hint:
+                                  'Enter your email',
+                                  icon: Icons
+                                      .mail_outline_rounded,
                                 ),
                               ),
                             ),
 
-                            const SizedBox(height: 20),
+                            const SizedBox(
+                              height: 20,
+                            ),
 
                             const Text(
                               'Password',
-                              style: TextStyle(
+                              style:
+                              TextStyle(
                                 fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                                fontWeight:
+                                FontWeight
+                                    .w600,
                                 color: kGrey,
-                                letterSpacing: 0.6,
+                                letterSpacing:
+                                0.6,
                               ),
                             ),
-                            const SizedBox(height: 6),
+
+                            const SizedBox(
+                              height: 6,
+                            ),
+
                             AnimatedScale(
-                              scale: _passwordFieldScale,
-                              duration: const Duration(milliseconds: 180),
-                              curve: Curves.easeOut,
-                              child: TextField(
-                                controller: _passwordController,
-                                focusNode: _passwordFocus,
-                                obscureText: _obscurePassword,
-                                style: const TextStyle(
-                                  color: kBlack,
-                                  fontWeight: FontWeight.w500,
+                              scale:
+                              _passwordFieldScale,
+                              duration:
+                              const Duration(
+                                milliseconds:
+                                180,
+                              ),
+                              curve:
+                              Curves.easeOut,
+                              child:
+                              TextField(
+                                controller:
+                                _passwordController,
+                                focusNode:
+                                _passwordFocus,
+                                obscureText:
+                                _obscurePassword,
+                                style:
+                                const TextStyle(
+                                  color:
+                                  kBlack,
+                                  fontWeight:
+                                  FontWeight
+                                      .w500,
                                 ),
-                                cursorColor: kOrange,
-                                decoration: _fieldDecoration(
+                                cursorColor:
+                                kOrange,
+                                decoration:
+                                _fieldDecoration(
                                   label: '',
-                                  hint: 'Enter your password',
-                                  icon: Icons.lock_outline_rounded,
-                                  suffixIcon: IconButton(
-                                    icon: AnimatedSwitcher(
+                                  hint:
+                                  'Enter your password',
+                                  icon: Icons
+                                      .lock_outline_rounded,
+                                  suffixIcon:
+                                  IconButton(
+                                    icon:
+                                    AnimatedSwitcher(
                                       duration:
-                                      const Duration(milliseconds: 200),
+                                      const Duration(
+                                        milliseconds:
+                                        200,
+                                      ),
                                       transitionBuilder:
-                                          (child, animation) =>
-                                          ScaleTransition(
-                                            scale: animation,
-                                            child: child,
-                                          ),
-                                      child: Icon(
+                                          (
+                                          child,
+                                          animation,
+                                          ) {
+                                        return ScaleTransition(
+                                          scale:
+                                          animation,
+                                          child:
+                                          child,
+                                        );
+                                      },
+                                      child:
+                                      Icon(
                                         _obscurePassword
-                                            ? Icons.visibility_outlined
+                                            ? Icons
+                                            .visibility_outlined
                                             : Icons
                                             .visibility_off_outlined,
-                                        key: ValueKey(_obscurePassword),
-                                        color: kGrey,
-                                        size: 20,
+                                        key: ValueKey(
+                                          _obscurePassword,
+                                        ),
+                                        color:
+                                        kGrey,
+                                        size:
+                                        20,
                                       ),
                                     ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _obscurePassword =
-                                        !_obscurePassword;
-                                      });
+                                    onPressed:
+                                        () {
+                                      setState(
+                                            () {
+                                          _obscurePassword =
+                                          !_obscurePassword;
+                                        },
+                                      );
                                     },
                                   ),
                                 ),
                               ),
                             ),
 
-                            const SizedBox(height: 28),
+                            const SizedBox(
+                              height: 28,
+                            ),
 
                             _AnimatedLoginButton(
-                              isLoading: _isLoading,
-                              onPressed: _isLoading ? null : _login,
+                              isLoading:
+                              _isLoading,
+                              onPressed:
+                              _isLoading
+                                  ? null
+                                  : _login,
                             ),
                           ],
                         ),
@@ -610,17 +903,28 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(
+                    height: 24,
+                  ),
+
+                  // ==================================================
+                  // FOOTER
+                  // ==================================================
 
                   FadeTransition(
                     opacity: _footerFade,
                     child: Text(
                       'Sandhya Softtech',
-                      textAlign: TextAlign.center,
+                      textAlign:
+                      TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
-                        color: kGrey.withOpacity(0.7),
-                        fontWeight: FontWeight.w500,
+                        color:
+                        kGrey.withOpacity(
+                          0.7,
+                        ),
+                        fontWeight:
+                        FontWeight.w500,
                       ),
                     ),
                   ),
@@ -634,10 +938,12 @@ class _LoginScreenState extends State<LoginScreen>
   }
 }
 
-/// Login button — solid orange fill matching the dashboard's "+ Add Employee"
-/// button, with a tap-scale animation, a subtle shimmer sweep, and an
-/// animated loading state.
-class _AnimatedLoginButton extends StatefulWidget {
+// ================================================================
+// ANIMATED LOGIN BUTTON
+// ================================================================
+
+class _AnimatedLoginButton
+    extends StatefulWidget {
   const _AnimatedLoginButton({
     required this.isLoading,
     required this.onPressed,
@@ -646,25 +952,34 @@ class _AnimatedLoginButton extends StatefulWidget {
   final bool isLoading;
   final VoidCallback? onPressed;
 
-  static const Color kOrange = Color(0xFFFF6B2C);
-  static const Color kOrangeDark = Color(0xFFE85A1A);
+  static const Color kOrange =
+  Color(0xFFFF6B2C);
+
+  static const Color kOrangeDark =
+  Color(0xFFE85A1A);
 
   @override
-  State<_AnimatedLoginButton> createState() => _AnimatedLoginButtonState();
+  State<_AnimatedLoginButton> createState() =>
+      _AnimatedLoginButtonState();
 }
 
-class _AnimatedLoginButtonState extends State<_AnimatedLoginButton>
+class _AnimatedLoginButtonState
+    extends State<_AnimatedLoginButton>
     with SingleTickerProviderStateMixin {
   double _scale = 1.0;
 
-  late final AnimationController _shimmerController;
+  late final AnimationController
+  _shimmerController;
 
   @override
   void initState() {
     super.initState();
-    _shimmerController = AnimationController(
+
+    _shimmerController =
+    AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration:
+      const Duration(milliseconds: 2200),
     )..repeat();
   }
 
@@ -675,64 +990,114 @@ class _AnimatedLoginButtonState extends State<_AnimatedLoginButton>
   }
 
   void _setScale(double value) {
-    if (widget.onPressed == null) return;
-    setState(() => _scale = value);
+    if (widget.onPressed == null) {
+      return;
+    }
+
+    setState(() {
+      _scale = value;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => _setScale(0.97),
-      onTapUp: (_) => _setScale(1.0),
-      onTapCancel: () => _setScale(1.0),
+      onTapDown: (_) =>
+          _setScale(0.97),
+      onTapUp: (_) =>
+          _setScale(1.0),
+      onTapCancel: () =>
+          _setScale(1.0),
       onTap: widget.onPressed,
       child: AnimatedScale(
         scale: _scale,
-        duration: const Duration(milliseconds: 120),
+        duration:
+        const Duration(milliseconds: 120),
         curve: Curves.easeOut,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
+          duration:
+          const Duration(milliseconds: 250),
           height: 52,
-          clipBehavior: Clip.antiAlias,
+          clipBehavior:
+          Clip.antiAlias,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius:
+            BorderRadius.circular(12),
             color: widget.onPressed == null
                 ? const Color(0xFFD9D9D9)
-                : _AnimatedLoginButton.kOrange,
-            boxShadow: widget.onPressed == null
+                : _AnimatedLoginButton
+                .kOrange,
+            boxShadow:
+            widget.onPressed == null
                 ? []
                 : [
               BoxShadow(
-                color: _AnimatedLoginButton.kOrange.withOpacity(0.30),
+                color:
+                _AnimatedLoginButton
+                    .kOrange
+                    .withOpacity(
+                  0.30,
+                ),
                 blurRadius: 16,
-                offset: const Offset(0, 8),
+                offset:
+                const Offset(
+                  0,
+                  8,
+                ),
               ),
             ],
           ),
           child: Stack(
-            alignment: Alignment.center,
+            alignment:
+            Alignment.center,
             children: [
-              // Soft diagonal shimmer sweep, only while enabled
+              // ==================================================
+              // SHIMMER
+              // ==================================================
+
               if (widget.onPressed != null)
                 AnimatedBuilder(
-                  animation: _shimmerController,
-                  builder: (context, child) {
+                  animation:
+                  _shimmerController,
+                  builder:
+                      (context, child) {
                     return Positioned.fill(
-                      child: FractionalTranslation(
-                        translation: Offset(
-                          -1.5 + (_shimmerController.value * 3),
+                      child:
+                      FractionalTranslation(
+                        translation:
+                        Offset(
+                          -1.5 +
+                              (_shimmerController
+                                  .value *
+                                  3),
                           0,
                         ),
-                        child: Transform.rotate(
+                        child:
+                        Transform.rotate(
                           angle: -0.4,
-                          child: Container(
+                          child:
+                          Container(
                             width: 40,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
+                            decoration:
+                            BoxDecoration(
+                              gradient:
+                              LinearGradient(
                                 colors: [
-                                  Colors.white.withOpacity(0.0),
-                                  Colors.white.withOpacity(0.22),
-                                  Colors.white.withOpacity(0.0),
+                                  Colors
+                                      .white
+                                      .withOpacity(
+                                    0.0,
+                                  ),
+                                  Colors
+                                      .white
+                                      .withOpacity(
+                                    0.22,
+                                  ),
+                                  Colors
+                                      .white
+                                      .withOpacity(
+                                    0.0,
+                                  ),
                                 ],
                               ),
                             ),
@@ -743,27 +1108,46 @@ class _AnimatedLoginButtonState extends State<_AnimatedLoginButton>
                   },
                 ),
 
+              // ==================================================
+              // BUTTON CONTENT
+              // ==================================================
+
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
+                duration:
+                const Duration(
+                  milliseconds: 200,
+                ),
                 child: widget.isLoading
                     ? const SizedBox(
-                  key: ValueKey('loading'),
+                  key: ValueKey(
+                    'loading',
+                  ),
                   height: 22,
                   width: 22,
-                  child: CircularProgressIndicator(
+                  child:
+                  CircularProgressIndicator(
                     strokeWidth: 2.4,
                     valueColor:
-                    AlwaysStoppedAnimation(Colors.white),
+                    AlwaysStoppedAnimation(
+                      Colors.white,
+                    ),
                   ),
                 )
                     : const Text(
                   'Login',
-                  key: ValueKey('label'),
-                  style: TextStyle(
+                  key: ValueKey(
+                    'label',
+                  ),
+                  style:
+                  TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: 0.4,
+                    fontWeight:
+                    FontWeight
+                        .w700,
+                    color:
+                    Colors.white,
+                    letterSpacing:
+                    0.4,
                   ),
                 ),
               ),

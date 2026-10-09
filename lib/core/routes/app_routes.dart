@@ -7,4 +7,6 @@ class AppRoutes {
   static const String employees = '/employees';
   static const String adminDashboard = '/admin-dashboard';
   static const String employeeDashboard = '/employee-dashboard';
+  static const String employeeApplyLeave = '/employee-apply-leave';
+  static const String employeeDailyReport = '/employee-daily-report';
 }
