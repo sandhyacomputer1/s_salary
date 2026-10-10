@@ -11,7 +11,8 @@ import 'features/employee/dashboard/screens/emp_dashboard_screen.dart';
 import 'features/employee/dashboard/screens/emp_dashboard_shell.dart';
 import 'features/employee/leave/screens/emp_apply_leave_screen.dart';
 import 'features/employee/daily_report/screens/emp_daily_report_screen.dart';
-
+import 'features/employee/expense_claims/screens/employee_submit_expense_claim_screen.dart';
+import 'features/employee/expense_claims/screens/employee_expense_claims_screen.dart';
 class SSalaryApp extends StatelessWidget {
   const SSalaryApp({super.key});
 
@@ -28,7 +29,10 @@ class SSalaryApp extends StatelessWidget {
 
       routes: {
         AppRoutes.splash: (context) => const SplashScreen(),
-
+        AppRoutes.employeeSubmitExpenseClaim: (context) =>
+        const EmployeeSubmitExpenseClaimScreen(),
+        AppRoutes.employeeExpenseClaims: (context) =>
+        const EmployeeExpenseClaimsScreen(),
         AppRoutes.login: (context) => const LoginScreen(),
         AppRoutes.employeeDailyReport: (context) => const EmpDailyReportScreen(),
         AppRoutes.twoFactor: (context) => const TwoFactorScreen(),

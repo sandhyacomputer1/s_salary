@@ -256,7 +256,8 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
         key: const ValueKey('success'),
         padding: const EdgeInsets.only(bottom: 16),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: successLight,
             borderRadius: BorderRadius.circular(10),

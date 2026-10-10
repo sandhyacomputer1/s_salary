@@ -574,6 +574,9 @@ class _EmpLeaveFormState extends State<EmpLeaveForm> {
           disabledForegroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 28),
+          // Overrides AppTheme's Size(double.infinity, 50) so this button can
+          // lay out inside a Row without demanding infinite width.
+          minimumSize: const Size(0, 48),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),

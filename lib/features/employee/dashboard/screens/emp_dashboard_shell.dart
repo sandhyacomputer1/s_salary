@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/storage/secure_storage.dart';
+import '../../attendance/screens/employee_attendance_screen.dart';
+import '../../profile/screens/employee_profile_screen.dart';
+import '../../salary/screens/employee_salary_screen.dart';
 import 'emp_dashboard_screen.dart';
 import '../../leave/screens/emp_apply_leave_screen.dart';
 import '../../daily_report/screens/emp_daily_report_screen.dart';
+import '../../expense_claims/screens/employee_submit_expense_claim_screen.dart';
 
 class EmpDashboardShell extends StatefulWidget {
   const EmpDashboardShell({super.key});
@@ -52,12 +56,18 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
         return const EmpDailyReportScreen(embedded: true);
       case 2:
         return const EmpApplyLeaveScreen(embedded: true);
+      case 3:
+        return const EmployeeAttendanceScreen(embedded: true);
+      case 5:
+        return const EmployeeSubmitExpenseClaimScreen(embedded: true);
+      case 6:
+        return const EmployeeSalaryScreen(embedded: true);
+      case 7:
+        return const EmployeeProfileScreen(embedded: true);
       default:
         return _PlaceholderScreen(title: _navItems[index].label);
     }
-  }
-
-  Future<void> _handleLogout() async {
+  }  Future<void> _handleLogout() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
