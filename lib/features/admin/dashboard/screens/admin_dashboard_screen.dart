@@ -7,6 +7,7 @@ import '../../../../data/models/employee.dart';
 import '../../../../data/services/employee_service.dart';
 import '../../../../data/services/leave_service.dart';
 import '../../../../data/services/expense_service.dart';
+import '../../branches/screens/branches_screen.dart';
 import '../../departments/screens/department_screen.dart';
 import '../../expenses/screens/expense_screen.dart';
 import '../../shift_roster/screens/shift_roster_screen.dart';
@@ -15,6 +16,7 @@ import '../../employees/screens/employee_details_screen.dart';
 import '../../calendar/screens/calendar_screen.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../leaves/screens/leave_screen.dart';
+import '../../team_roles/screens/team_roles_screen.dart';
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({
     super.key,
@@ -1904,10 +1906,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   _drawerItem(
                     icon: Icons.business_outlined,
                     title: 'Branches & Locations',
+                    onTap: () {
+                      Navigator.pop(context);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const BranchesScreen(),
+                        ),
+                      );
+                    },
                   ),
                   _drawerItem(
                     icon: Icons.admin_panel_settings_outlined,
                     title: 'Team & Roles',
+                    onTap: () {
+                      Navigator.pop(context);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TeamRolesScreen(),
+                        ),
+                      );
+                    },
                   ),
                   _drawerItem(
                     icon: Icons.settings_outlined,
