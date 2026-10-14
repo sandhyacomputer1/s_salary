@@ -11,28 +11,23 @@ import '../widgets/emp_dash_summary_card.dart';
 
 class EmpDashboardScreen extends StatefulWidget {
   const EmpDashboardScreen({super.key});
-
   @override
   State<EmpDashboardScreen> createState() => _EmpDashboardScreenState();
 }
-
 class _EmpDashboardScreenState extends State<EmpDashboardScreen> {
   final EmpDashService _service = EmpDashService();
 
   EmpDashProfileModel? _profile;
   EmpDashShiftModel? _shift;
   List<EmpDashAttendanceRecord> _attendance = [];
-
   bool _isLoading = true;
   String? _error;
   bool _isActionLoading = false;
-
   static const Color primary = Color(0xFFE96832);
   static const Color textDark = Color(0xFF18212F);
   static const Color textMedium = Color(0xFF4B5563);
   static const Color textLight = Color(0xFF8A93A1);
   static const Color border = Color(0xFFE1E5EA);
-
   @override
   void initState() {
     super.initState();
