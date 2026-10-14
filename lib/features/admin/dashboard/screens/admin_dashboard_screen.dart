@@ -7,6 +7,7 @@ import '../../../../data/models/employee.dart';
 import '../../../../data/services/employee_service.dart';
 import '../../../../data/services/leave_service.dart';
 import '../../../../data/services/expense_service.dart';
+import '../../audit_trail/screens/audit_trail_screen.dart';
 import '../../branches/screens/branches_screen.dart';
 import '../../departments/screens/department_screen.dart';
 import '../../expenses/screens/expense_screen.dart';
@@ -1945,6 +1946,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   _drawerItem(
                     icon: Icons.settings_outlined,
                     title: 'Settings',
+                  ),
+                  _drawerItem(
+                    icon: Icons.shield_outlined,
+                    title: 'Audit Trail',
+                    onTap: () {
+                      Navigator.pop(context);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AuditTrailScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
