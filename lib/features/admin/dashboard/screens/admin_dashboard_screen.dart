@@ -12,6 +12,7 @@ import '../../branches/screens/branches_screen.dart';
 import '../../departments/screens/department_screen.dart';
 import '../../expenses/screens/expense_screen.dart';
 import '../../field_tracking/screens/field_tracking_screen.dart';
+import '../../settings/screens/settings_screen.dart';
 import '../../shift_roster/screens/shift_roster_screen.dart';
 import '../../employees/screens/add_employee_screen.dart';
 import '../../employees/screens/employee_details_screen.dart';
@@ -1946,6 +1947,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   _drawerItem(
                     icon: Icons.settings_outlined,
                     title: 'Settings',
+                    onTap: () {
+                      Navigator.pop(context);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SettingsScreen(),
+                        ),
+                      );
+                    },
                   ),
                   _drawerItem(
                     icon: Icons.shield_outlined,
