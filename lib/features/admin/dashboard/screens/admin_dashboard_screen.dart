@@ -919,17 +919,41 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       if (metric.value > maxValue) maxValue = metric.value;
     }
 
+    // Phone: 2x2 grid, equal halves (no LayoutBuilder, so it is
+    // safe inside IntrinsicHeight on wide screens too).
+    if (mobile) {
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildGaugeTile(metrics[0], maxValue, mobile)),
+              Expanded(child: _buildGaugeTile(metrics[1], maxValue, mobile)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(child: _buildGaugeTile(metrics[2], maxValue, mobile)),
+              Expanded(child: _buildGaugeTile(metrics[3], maxValue, mobile)),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // Web / wide: original layout
     return Wrap(
       alignment: WrapAlignment.spaceEvenly,
       runSpacing: 20,
       children: metrics.map((metric) {
         return SizedBox(
-          width: mobile ? 132 : 150,
+          width: 150,
           child: _buildGaugeTile(metric, maxValue, mobile),
         );
       }).toList(),
     );
   }
+
 
   Widget _buildGaugeTile(_MetricData metric, int maxValue, bool mobile) {
     final fraction = maxValue == 0 ? 0.0 : metric.value / maxValue;

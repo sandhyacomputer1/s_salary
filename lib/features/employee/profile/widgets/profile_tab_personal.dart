@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../models/employee_profile_details_model.dart';
 import '../models/employee_profile_model.dart';
-import '../utils/profile_colors.dart';
 import '../utils/profile_formatters.dart';
 import 'profile_grid.dart';
 import 'profile_section_card.dart';
@@ -25,10 +24,13 @@ class ProfileTabPersonal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = MediaQuery.of(context).size.width < 700;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ProfileSectionCard(
+          icon: Icons.person_outline_rounded,
           title: 'Personal Details',
           actionLabel: 'Edit Personal Info',
           onAction: onEditPersonal,
@@ -58,13 +60,13 @@ class ProfileTabPersonal extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: mobile ? 14 : 16),
         ProfileSectionCard(
+          icon: Icons.contact_phone_outlined,
           title: 'Emergency Contacts',
           actionLabel: 'Edit Emergency Contact',
           onAction: onEditEmergency,
           child: ProfileGrid(
-            cellWidth: 260,
             items: [
               ProfileGridItem(
                 'Primary Emergency Contact',

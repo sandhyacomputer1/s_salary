@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/employee_profile_model.dart';
-import '../utils/profile_colors.dart';
 import '../utils/profile_formatters.dart';
 import 'profile_grid.dart';
 import 'profile_section_card.dart';
@@ -21,6 +20,7 @@ class ProfileTabEmployment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ProfileSectionCard(
+      icon: Icons.work_outline_rounded,
       title: 'Current Employment Information',
       child: ProfileGrid(
         items: [

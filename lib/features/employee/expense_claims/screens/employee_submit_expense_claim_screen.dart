@@ -32,6 +32,12 @@ class EmployeeSubmitExpenseClaimScreen extends StatefulWidget {
 
 class _EmployeeSubmitExpenseClaimScreenState
     extends State<EmployeeSubmitExpenseClaimScreen> {
+  static const double _mobileBreakpoint = 700;
+
+  /// Max width of the content on wide screens.
+  /// double.infinity = fill the screen. Use e.g. 1200 to limit it.
+  static const double _maxContentWidth = double.infinity;
+
   final ExpenseClaimRepository _repository = ExpenseClaimRepository();
 
   bool _isSubmitting = false;
@@ -100,7 +106,7 @@ class _EmployeeSubmitExpenseClaimScreenState
         SnackBar(
           content: Text(message),
           backgroundColor:
-          isError ? const Color(0xFFC62828) : const Color(0xFF2E7D32),
+          isError ? ExpenseColors.danger : ExpenseColors.success,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -119,79 +125,53 @@ class _EmployeeSubmitExpenseClaimScreenState
     if (mounted) _loadSummary(showLoader: false);
   }
 
+  // ==========================================================
+  // BUILD
+  // ==========================================================
+
   @override
   Widget build(BuildContext context) {
+    final mobile = MediaQuery.of(context).size.width < _mobileBreakpoint;
+
     // Body only — no Scaffold. The parent (dashboard shell or Profile tab)
     // owns the Scaffold, AppBar and background.
     final content = SafeArea(
       child: SingleChildScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (_summaryLoading)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 16),
-                child: LinearProgressIndicator(minHeight: 3),
-              )
-            else if (_summary != null) ...[
-              ExpenseClaimSummaryCards(summary: _summary!),
-              const SizedBox(height: 20),
-            ],
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: ExpenseColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'New Expense Claim',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: ExpenseColors.textPrimary,
+        padding: EdgeInsets.fromLTRB(
+          mobile ? 14 : 22,
+          mobile ? 16 : 22,
+          mobile ? 14 : 22,
+          28,
+        ),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(mobile),
+                SizedBox(height: mobile ? 14 : 20),
+                if (_summaryLoading)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: LinearProgressIndicator(
+                      minHeight: 3,
+                      color: ExpenseColors.primary,
+                      backgroundColor: ExpenseColors.primaryTint,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Fill in the details to request reimbursement.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: ExpenseColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  ExpenseClaimForm(
-                    isSubmitting: _isSubmitting,
-                    onSubmit: _handleSubmit,
-                  ),
+                  )
+                else if (_summary != null) ...[
+                  ExpenseClaimSummaryCards(summary: _summary!),
+                  SizedBox(height: mobile ? 14 : 20),
                 ],
-              ),
+                _buildFormCard(mobile),
+                SizedBox(height: mobile ? 14 : 16),
+                _buildViewAllButton(mobile),
+              ],
             ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: ExpenseColors.primary,
-                side: const BorderSide(color: ExpenseColors.primary),
-                minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              onPressed: _isSubmitting ? null : _openAllClaims,
-              icon: const Icon(Icons.list_alt_outlined),
-              label: const Text(
-                'View All Claims',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
+          ),
         ),
       ),
     );
@@ -205,13 +185,150 @@ class _EmployeeSubmitExpenseClaimScreenState
     return Scaffold(
       backgroundColor: ExpenseColors.background,
       appBar: AppBar(
-        title: const Text('Submit Expense Claim'),
+        title: const Text(
+          'Submit Expense Claim',
+          style: TextStyle(
+            color: ExpenseColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         backgroundColor: Colors.white,
         foregroundColor: ExpenseColors.textPrimary,
         elevation: 0,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: Colors.white,
       ),
       body: content,
+    );
+  }
+
+  // ==========================================================
+  // PAGE HEADER
+  // ==========================================================
+
+  Widget _buildHeader(bool mobile) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Expense Claims',
+          style: TextStyle(
+            fontSize: mobile ? 22 : 27,
+            fontWeight: FontWeight.w700,
+            color: ExpenseColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Submit a new claim and track your reimbursements.',
+          style: TextStyle(
+            fontSize: mobile ? 13 : 14,
+            color: Colors.grey.shade600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ==========================================================
+  // FORM CARD
+  // ==========================================================
+
+  Widget _buildFormCard(bool mobile) {
+    return Container(
+      padding: EdgeInsets.all(mobile ? 14 : 20),
+      decoration: BoxDecoration(
+        color: ExpenseColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ExpenseColors.border),
+        boxShadow: ExpenseColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: ExpenseColors.primaryTint,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  Icons.receipt_long_outlined,
+                  size: 18,
+                  color: ExpenseColors.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'New Expense Claim',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: ExpenseColors.textPrimary,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Fill in the details to request reimbursement.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: ExpenseColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: mobile ? 14 : 18),
+          const Divider(height: 1, color: Color(0xFFEDEFF3)),
+          SizedBox(height: mobile ? 14 : 18),
+          ExpenseClaimForm(
+            isSubmitting: _isSubmitting,
+            onSubmit: _handleSubmit,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================================
+  // VIEW ALL CLAIMS
+  // ==========================================================
+
+  Widget _buildViewAllButton(bool mobile) {
+    final button = OutlinedButton.icon(
+      onPressed: _isSubmitting ? null : _openAllClaims,
+      icon: const Icon(Icons.list_alt_outlined, size: 18),
+      label: const Text('View All Claims'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: ExpenseColors.primary,
+        side: const BorderSide(color: ExpenseColors.primary),
+        minimumSize: Size(mobile ? double.infinity : 200, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
+
+    if (mobile) return button;
+
+    return Align(
+      alignment: Alignment.centerRight,
+      child: button,
     );
   }
 }

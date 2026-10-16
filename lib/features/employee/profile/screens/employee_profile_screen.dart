@@ -12,7 +12,23 @@ import '../widgets/profile_tab_bank.dart';
 import '../widgets/profile_tab_employment.dart';
 import '../widgets/profile_tab_expense_claims.dart';
 import '../widgets/profile_tab_personal.dart';
-import '../widgets/profile_tab_bar.dart';
+
+const double _mobileBreakpoint = 700;
+
+/// Max width of the page content.
+/// double.infinity = fill the screen. Use e.g. 1400 to limit it on
+/// very large monitors.
+const double _maxContentWidth = double.infinity;
+
+const Color _border = Color(0xFFE5E7EB);
+
+const List<BoxShadow> _cardShadow = [
+  BoxShadow(
+    color: Color(0x06000000),
+    blurRadius: 10,
+    offset: Offset(0, 3),
+  ),
+];
 
 class EmployeeProfileScreen extends ConsumerStatefulWidget {
   final bool embedded;
@@ -27,6 +43,15 @@ class _EmployeeProfileScreenState
     extends ConsumerState<EmployeeProfileScreen> {
   int _tabIndex = 0;
 
+  Future<void> _refresh() async {
+    ref.invalidate(employeeProfileProvider);
+    try {
+      await ref.read(employeeProfileProvider.future);
+    } catch (_) {
+      // The error state is shown by the provider itself.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(employeeProfileProvider);
@@ -39,14 +64,18 @@ class _EmployeeProfileScreenState
         message: err.toString().replaceFirst('Exception: ', ''),
         onRetry: () => ref.invalidate(employeeProfileProvider),
       ),
-      data: (profile) => _Content(
-        profile: profile,
-        tabIndex: _tabIndex,
-        onTabChanged: (i) => setState(() => _tabIndex = i),
-        onEditAll: () => _openFullEdit(profile),
-        onEditPersonal: () => _openFullEdit(profile, initialTab: 0),
-        onEditEmergency: () => _openFullEdit(profile, initialTab: 0),
-        onEditBank: () => _openFullEdit(profile, initialTab: 1),
+      data: (profile) => RefreshIndicator(
+        color: ProfileColors.primary,
+        onRefresh: _refresh,
+        child: _Content(
+          profile: profile,
+          tabIndex: _tabIndex,
+          onTabChanged: (i) => setState(() => _tabIndex = i),
+          onEditAll: () => _openFullEdit(profile),
+          onEditPersonal: () => _openFullEdit(profile, initialTab: 0),
+          onEditEmergency: () => _openFullEdit(profile, initialTab: 0),
+          onEditBank: () => _openFullEdit(profile, initialTab: 1),
+        ),
       ),
     );
 
@@ -64,9 +93,17 @@ class _EmployeeProfileScreenState
           style: TextStyle(
             color: ProfileColors.textDark,
             fontWeight: FontWeight.w700,
-            fontSize: 16,
+            fontSize: 18,
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: profileAsync.isLoading ? null : _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          const SizedBox(width: 6),
+        ],
       ),
       body: body,
     );
@@ -86,6 +123,10 @@ class _EmployeeProfileScreenState
     );
   }
 }
+
+// ==============================================================
+// CONTENT
+// ==============================================================
 
 class _Content extends StatelessWidget {
   final EmployeeProfileModel profile;
@@ -108,6 +149,8 @@ class _Content extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = MediaQuery.of(context).size.width < _mobileBreakpoint;
+
     final emp = profile.employee;
     final user = profile.user;
 
@@ -140,13 +183,22 @@ class _Content extends StatelessWidget {
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Center(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(
+        mobile ? 14 : 22,
+        mobile ? 16 : 22,
+        mobile ? 14 : 22,
+        32,
+      ),
+      child: Align(
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1200),
+          constraints: const BoxConstraints(maxWidth: _maxContentWidth),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              _PageHeader(mobile: mobile),
+              SizedBox(height: mobile ? 14 : 20),
               ProfileHeaderCard(
                 name: user.name,
                 email: user.email,
@@ -157,14 +209,18 @@ class _Content extends StatelessWidget {
                 status: emp.status,
                 onEditAll: onEditAll,
               ),
-              const SizedBox(height: 20),
-              ProfileTabBar(
+              SizedBox(height: mobile ? 14 : 20),_TabMenu(
                 selectedIndex: tabIndex,
                 onChanged: onTabChanged,
+                mobile: mobile,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
               tabBody,
-              const SizedBox(height: 8),
+              SizedBox(height: mobile ? 14 : 20),
+              Align(
+                alignment: Alignment.topLeft,
+                child: tabBody,
+              ),
             ],
           ),
         ),
@@ -172,6 +228,166 @@ class _Content extends StatelessWidget {
     );
   }
 }
+
+// ==============================================================
+// PAGE HEADER
+// ==============================================================
+
+class _PageHeader extends StatelessWidget {
+  final bool mobile;
+  const _PageHeader({required this.mobile});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'My Profile',
+          style: TextStyle(
+            fontSize: mobile ? 22 : 27,
+            fontWeight: FontWeight.w700,
+            color: ProfileColors.textDark,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'View and manage your personal, bank and employment details.',
+          style: TextStyle(
+            fontSize: mobile ? 13 : 14,
+            color: Colors.grey.shade600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ==============================================================
+// TAB MENU (pill style, separate card)
+//
+// Index order must match the switch in _Content:
+// 0 Personal, 1 Bank, 2 Employment, 3 Expense Claims
+// ==============================================================
+
+class _TabMenu extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+  final bool mobile;
+
+  const _TabMenu({
+    required this.selectedIndex,
+    required this.onChanged,
+    required this.mobile,
+  });
+
+  static const List<String> _labels = [
+    'Personal Details',
+    'Bank Details',
+    'Employment',
+    'Expense Claims',
+  ];
+
+  static const List<String> _labelsShort = [
+    'Personal',
+    'Bank',
+    'Employment',
+    'Claims',
+  ];
+
+  static const List<IconData> _icons = [
+    Icons.person_outline_rounded,
+    Icons.account_balance_outlined,
+    Icons.work_outline_rounded,
+    Icons.receipt_long_outlined,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final labels = mobile ? _labelsShort : _labels;
+
+    final pills = [
+      for (var i = 0; i < labels.length; i++) _pill(i, labels[i]),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(mobile ? 6 : 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+        boxShadow: _cardShadow,
+      ),
+      child: mobile
+      // Phone: scrolls sideways if the pills do not fit.
+          ? SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (var i = 0; i < pills.length; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              pills[i],
+            ],
+          ],
+        ),
+      )
+      // Tablet / web: pills share the full width evenly.
+          : Row(
+        children: [
+          for (var i = 0; i < pills.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            Expanded(child: pills[i]),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _pill(int index, String label) {
+    final selected = selectedIndex == index;
+    final fg = selected ? Colors.white : const Color(0xFF596273);
+
+    return Material(
+      color: selected ? ProfileColors.primary : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => onChanged(index),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: mobile ? 12 : 16,
+            vertical: mobile ? 9 : 12,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(_icons[index], size: 17, color: fg),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: mobile ? 12.5 : 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: fg,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==============================================================
+// ERROR STATE
+// ==============================================================
 
 class _ErrorState extends StatelessWidget {
   final String message;
@@ -181,14 +397,42 @@ class _ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 480),
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _border),
+          boxShadow: _cardShadow,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded,
-                color: ProfileColors.primary, size: 40),
-            const SizedBox(height: 12),
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF1F1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.error_outline_rounded,
+                color: Color(0xFFDC2626),
+                size: 30,
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Unable to load profile',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: ProfileColors.textDark,
+              ),
+            ),
+            const SizedBox(height: 6),
             Text(
               message.isEmpty ? 'Failed to load profile.' : message,
               textAlign: TextAlign.center,
@@ -197,13 +441,14 @@ class _ErrorState extends StatelessWidget {
                 color: ProfileColors.textMedium,
               ),
             ),
-            const SizedBox(height: 16),
-            FilledButton(
+            const SizedBox(height: 18),
+            FilledButton.icon(
               onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
               style: FilledButton.styleFrom(
                 backgroundColor: ProfileColors.primary,
               ),
-              child: const Text('Retry'),
             ),
           ],
         ),

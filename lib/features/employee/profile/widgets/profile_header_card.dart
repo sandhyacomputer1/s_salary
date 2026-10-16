@@ -29,44 +29,56 @@ class ProfileHeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = MediaQuery.of(context).size.width < 700;
+
     final roleLine = [designation, department]
         .where((s) => s.trim().isNotEmpty)
         .join(' • ');
-    final contactLine = [email, phone]
-        .where((s) => s.trim().isNotEmpty)
-        .join('  •  ');
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(mobile ? 16 : 22),
       decoration: BoxDecoration(
         color: ProfileColors.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: ProfileColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
       ),
       child: LayoutBuilder(
         builder: (context, c) {
           final compact = c.maxWidth < 720;
+          final avatar = compact ? 54.0 : 66.0;
+
           final left = Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 62,
-                height: 62,
-                decoration: const BoxDecoration(
+                width: avatar,
+                height: avatar,
+                decoration: BoxDecoration(
                   color: ProfileColors.primary,
                   shape: BoxShape.circle,
+                  border: Border.all(
+                    color: ProfileColors.primaryLight,
+                    width: 4,
+                  ),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   ProfileFormatters.initials(name),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
-                    fontSize: 22,
+                    fontSize: compact ? 18 : 22,
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: compact ? 12 : 18),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,11 +89,9 @@ class ProfileHeaderCard extends StatelessWidget {
                       runSpacing: 6,
                       children: [
                         Text(
-                          name.trim().isEmpty
-                              ? '—'
-                              : name.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 18,
+                          name.trim().isEmpty ? '—' : name.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: compact ? 16 : 19,
                             fontWeight: FontWeight.w800,
                             color: ProfileColors.textDark,
                             letterSpacing: 0.2,
@@ -103,14 +113,24 @@ class ProfileHeaderCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (contactLine.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        contactLine,
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          color: ProfileColors.textLight,
-                        ),
+                    if (email.trim().isNotEmpty ||
+                        phone.trim().isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 6,
+                        children: [
+                          if (email.trim().isNotEmpty)
+                            _ContactItem(
+                              icon: Icons.mail_outline_rounded,
+                              text: email,
+                            ),
+                          if (phone.trim().isNotEmpty)
+                            _ContactItem(
+                              icon: Icons.phone_outlined,
+                              text: phone,
+                            ),
+                        ],
                       ),
                     ],
                   ],
@@ -119,24 +139,23 @@ class ProfileHeaderCard extends StatelessWidget {
             ],
           );
 
-          final button = FilledButton(
+          final button = FilledButton.icon(
             onPressed: onEditAll,
+            icon: const Icon(Icons.edit_outlined, size: 17),
+            label: const Text('Edit Profile & Bank Details'),
             style: FilledButton.styleFrom(
               backgroundColor: ProfileColors.primary,
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(
                 horizontal: 20,
-                vertical: 16,
+                vertical: 15,
+              ),
+              textStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text(
-              'Edit Profile & Bank Details',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
               ),
             ),
           );
@@ -161,6 +180,32 @@ class ProfileHeaderCard extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _ContactItem extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _ContactItem({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: ProfileColors.textLight),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: ProfileColors.textMedium,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

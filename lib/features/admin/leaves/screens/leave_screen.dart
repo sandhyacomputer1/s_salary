@@ -347,49 +347,78 @@ class _LeaveScreenState extends State<LeaveScreen> {
   }
 
   Widget _buildSummary() {
-    return Wrap(
-      spacing: 14,
-      runSpacing: 14,
-      children: [
-        _SummaryCard(
-          title: 'Total Requests',
-          value: '${_leaves.length}',
-          icon: Icons.event_note_outlined,
-          iconBackground: const Color(0xFFFFEEE7),
-          iconColor: primary,
-        ),
-        _SummaryCard(
-          title: 'Pending',
-          value: '$_pendingCount',
-          icon: Icons.pending_actions_rounded,
-          iconBackground: const Color(0xFFFFF4D6),
-          iconColor: const Color(0xFFD99000),
-        ),
-        _SummaryCard(
-          title: 'Approved',
-          value: '$_approvedCount',
-          icon: Icons.check_circle_outline_rounded,
-          iconBackground: const Color(0xFFE7F7EF),
-          iconColor: const Color(0xFF159957),
-        ),
-        _SummaryCard(
-          title: 'Rejected',
-          value: '$_rejectedCount',
-          icon: Icons.cancel_outlined,
-          iconBackground: const Color(0xFFFFE8E8),
-          iconColor: danger,
-        ),
-        _SummaryCard(
-          title: 'Cancelled',
-          value: '$_cancelledCount',
-          icon: Icons.block_outlined,
-          iconBackground: const Color(0xFFF1F2F4),
-          iconColor: textLight,
-        ),
-      ],
+    final cards = <_SummaryCard>[
+      _SummaryCard(
+        title: 'Total Requests',
+        value: '${_leaves.length}',
+        icon: Icons.event_note_outlined,
+        iconBackground: const Color(0xFFFFEEE7),
+        iconColor: primary,
+      ),
+      _SummaryCard(
+        title: 'Pending',
+        value: '$_pendingCount',
+        icon: Icons.pending_actions_rounded,
+        iconBackground: const Color(0xFFFFF4D6),
+        iconColor: const Color(0xFFD99000),
+      ),
+      _SummaryCard(
+        title: 'Approved',
+        value: '$_approvedCount',
+        icon: Icons.check_circle_outline_rounded,
+        iconBackground: const Color(0xFFE7F7EF),
+        iconColor: const Color(0xFF159957),
+      ),
+      _SummaryCard(
+        title: 'Rejected',
+        value: '$_rejectedCount',
+        icon: Icons.cancel_outlined,
+        iconBackground: const Color(0xFFFFE8E8),
+        iconColor: danger,
+      ),
+      _SummaryCard(
+        title: 'Cancelled',
+        value: '$_cancelledCount',
+        icon: Icons.block_outlined,
+        iconBackground: const Color(0xFFF1F2F4),
+        iconColor: textLight,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+
+        // Web / wide : all 5 in one row
+        // Tablet     : 3 per row
+        // Phone      : 2 per row
+        final int columns = width >= 900 ? 5 : (width >= 600 ? 3 : 2);
+        final bool compact = width < 600;
+        final double spacing = compact ? 10 : 14;
+
+        final double cardWidth =
+            (width - spacing * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: cards.map((card) {
+            return SizedBox(
+              width: cardWidth,
+              child: _SummaryCard(
+                title: card.title,
+                value: card.value,
+                icon: card.icon,
+                iconBackground: card.iconBackground,
+                iconColor: card.iconColor,
+                compact: compact,
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
-
   Widget _buildSearchAndFilter() {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -545,6 +574,7 @@ class _SummaryCard extends StatelessWidget {
   final IconData icon;
   final Color iconBackground;
   final Color iconColor;
+  final bool compact;
 
   const _SummaryCard({
     required this.title,
@@ -552,13 +582,16 @@ class _SummaryCard extends StatelessWidget {
     required this.icon,
     required this.iconBackground,
     required this.iconColor,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final double iconBox = compact ? 34 : 42;
+
     return Container(
-      width: 185,
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 12 : 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -569,8 +602,8 @@ class _SummaryCard extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: iconBox,
+            height: iconBox,
             decoration: BoxDecoration(
               color: iconBackground,
               borderRadius: BorderRadius.circular(10),
@@ -578,19 +611,21 @@ class _SummaryCard extends StatelessWidget {
             child: Icon(
               icon,
               color: iconColor,
-              size: 21,
+              size: compact ? 18 : 21,
             ),
           ),
-          const SizedBox(width: 11),
+          SizedBox(width: compact ? 8 : 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: Color(0xFF8A93A1),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: compact ? 11 : 11.5,
+                    color: const Color(0xFF8A93A1),
                   ),
                 ),
                 const SizedBox(height: 4),

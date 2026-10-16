@@ -35,14 +35,34 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
 
   Timer? _successTimer;
 
+  // Palette (same as the admin screens)
+  static const Color primary = Color(0xFFE96832);
+  static const Color primaryTint = Color(0xFFFFEEE7);
+  static const Color pageBg = Color(0xFFF7F8FA);
   static const Color textDark = Color(0xFF18212F);
   static const Color textMedium = Color(0xFF4B5563);
   static const Color textLight = Color(0xFF8A93A1);
-  static const Color border = Color(0xFFE1E5EA);
+  static const Color border = Color(0xFFE5E7EB);
   static const Color success = Color(0xFF159957);
   static const Color successLight = Color(0xFFE7F7EF);
 
-  static const double _maxContentWidth = 1100;
+  static const double _mobileBreakpoint = 700;
+
+  /// Width from which form and history sit side by side.
+  static const double _wideBreakpoint = 1000;
+
+  /// Max width of the page content.
+  /// double.infinity = fill the screen. Use e.g. 1600 to limit it on
+  /// very large monitors.
+  static const double _maxContentWidth = double.infinity;
+
+  static const List<BoxShadow> _cardShadow = [
+    BoxShadow(
+      color: Color(0x06000000),
+      blurRadius: 10,
+      offset: Offset(0, 3),
+    ),
+  ];
 
   @override
   void initState() {
@@ -168,7 +188,7 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: pageBg,
       appBar: widget.embedded
           ? null
           : AppBar(
@@ -181,71 +201,133 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
           style: TextStyle(
             color: textDark,
             fontWeight: FontWeight.w700,
-            fontSize: 17,
+            fontSize: 18,
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _isLoading ? null : _loadAll,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          const SizedBox(width: 6),
+        ],
       ),
       body: _buildBody(),
     );
   }
 
-  Widget _wrap(Widget child) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: _maxContentWidth),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: child,
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: primary),
+      );
+    }
+
+    final width = MediaQuery.of(context).size.width;
+    final mobile = width < _mobileBreakpoint;
+    final wide = width >= _wideBreakpoint;
+
+    final form = EmpLeaveForm(
+      balances: _balances,
+      isSubmitting: _isSubmitting,
+      onSubmit: _submitLeave,
+    );
+
+    final history = _buildHistorySection(mobile);
+
+    return RefreshIndicator(
+      color: primary,
+      onRefresh: _loadAll,
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          mobile ? 14 : 22,
+          mobile ? 16 : 22,
+          mobile ? 14 : 22,
+          32,
+        ),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildPageHeader(mobile),
+                SizedBox(height: mobile ? 14 : 20),
+                _buildSuccessBanner(),
+                _buildSectionTitle('Leave Balance', mobile),
+                _buildBalances(mobile),
+                SizedBox(height: mobile ? 18 : 24),
+                if (wide)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 5, child: form),
+                      const SizedBox(width: 20),
+                      Expanded(flex: 4, child: history),
+                    ],
+                  )
+                else ...[
+                  form,
+                  SizedBox(height: mobile ? 18 : 24),
+                  history,
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+  // ============================================================
+  // PAGE HEADER
+  // ============================================================
 
-    return RefreshIndicator(
-      onRefresh: _loadAll,
-      child: CustomScrollView(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverToBoxAdapter(
-            child: _wrap(
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 16),
-                  _buildSuccessBanner(),
-                  _buildBalances(),
-                  const SizedBox(height: 16),
-                  EmpLeaveForm(
-                    balances: _balances,
-                    isSubmitting: _isSubmitting,
-                    onSubmit: _submitLeave,
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Real-time Leave Applications Log (${_history.length})',
-                    style: const TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800,
-                      color: textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-              ),
-            ),
+  Widget _buildPageHeader(bool mobile) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Apply Leave',
+          style: TextStyle(
+            fontSize: mobile ? 22 : 27,
+            fontWeight: FontWeight.w700,
+            color: textDark,
           ),
-          ..._buildHistorySlivers(),
-          const SliverToBoxAdapter(child: SizedBox(height: 32)),
-        ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Check your balance, request time off and track your applications.',
+          style: TextStyle(
+            fontSize: mobile ? 13 : 14,
+            color: Colors.grey.shade600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionTitle(String title, bool mobile) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: mobile ? 15 : 16,
+          fontWeight: FontWeight.w700,
+          color: textDark,
+        ),
       ),
     );
   }
+
+  // ============================================================
+  // SUCCESS BANNER
+  // ============================================================
 
   Widget _buildSuccessBanner() {
     return AnimatedSwitcher(
@@ -293,7 +375,11 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
     );
   }
 
-  Widget _buildBalances() {
+  // ============================================================
+  // BALANCES
+  // ============================================================
+
+  Widget _buildBalances(bool mobile) {
     if (_balances.isEmpty) {
       return _NoticeCard(
         icon: Icons.info_outline_rounded,
@@ -304,8 +390,9 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900 ? 4 : 2;
-        const spacing = 12.0;
+        // Phone: 2 per row. Tablet / web: 4 per row.
+        final columns = constraints.maxWidth >= 700 ? 4 : 2;
+        final spacing = mobile ? 10.0 : 14.0;
         final itemWidth =
         ((constraints.maxWidth - spacing * (columns - 1)) / columns)
             .floorToDouble();
@@ -325,43 +412,114 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
     );
   }
 
-  List<Widget> _buildHistorySlivers() {
+  // ============================================================
+  // HISTORY SECTION
+  // ============================================================
+
+  Widget _buildHistorySection(bool mobile) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildHistoryHeader(mobile),
+        const SizedBox(height: 12),
+        ..._buildHistoryContent(),
+      ],
+    );
+  }
+
+  Widget _buildHistoryHeader(bool mobile) {
+    return Container(
+      padding: EdgeInsets.all(mobile ? 12 : 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: border),
+        boxShadow: _cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: primaryTint,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: const Icon(
+              Icons.event_note_outlined,
+              size: 18,
+              color: primary,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Leave Applications',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: textDark,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Real-time log of your requests',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11.5, color: textLight),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: primaryTint,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '${_history.length}',
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildHistoryContent() {
     if (_historyError != null && _history.isEmpty) {
       return [
-        SliverToBoxAdapter(
-          child: _wrap(
-            _ErrorCard(message: _historyError!, onRetry: _retry),
-          ),
-        ),
+        _ErrorCard(message: _historyError!, onRetry: _retry),
       ];
     }
 
     if (_history.isEmpty) {
-      return [
-        SliverToBoxAdapter(
-          child: _wrap(
-            const _NoticeCard(
-              icon: Icons.event_note_outlined,
-              message:
-              'No leave applications yet. Your submitted requests will appear here.',
-            ),
-          ),
+      return const [
+        _NoticeCard(
+          icon: Icons.event_note_outlined,
+          message:
+          'No leave applications yet. Your submitted requests will appear here.',
         ),
       ];
     }
 
     return [
-      SliverList.builder(
-        itemCount: _history.length,
-        itemBuilder: (context, index) {
-          return _wrap(
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: EmpLeaveHistoryCard(leave: _history[index]),
-            ),
-          );
-        },
-      ),
+      for (final leave in _history)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: EmpLeaveHistoryCard(leave: leave),
+        ),
     ];
   }
 }
@@ -381,6 +539,7 @@ class _NoticeCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _EmpApplyLeaveScreenState.border),
+        boxShadow: _EmpApplyLeaveScreenState._cardShadow,
       ),
       child: Row(
         children: [
@@ -416,12 +575,24 @@ class _ErrorCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _EmpApplyLeaveScreenState.border),
+        boxShadow: _EmpApplyLeaveScreenState._cardShadow,
       ),
       child: Column(
         children: [
-          const Icon(Icons.error_outline_rounded,
-              size: 36, color: Colors.redAccent),
-          const SizedBox(height: 10),
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF1F1),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.error_outline_rounded,
+              size: 28,
+              color: Color(0xFFDC2626),
+            ),
+          ),
+          const SizedBox(height: 12),
           const Text(
             'Unable to load leave applications',
             style: TextStyle(
@@ -444,6 +615,9 @@ class _ErrorCard extends StatelessWidget {
             onPressed: onRetry,
             icon: const Icon(Icons.refresh),
             label: const Text('Try Again'),
+            style: FilledButton.styleFrom(
+              backgroundColor: _EmpApplyLeaveScreenState.primary,
+            ),
           ),
         ],
       ),
