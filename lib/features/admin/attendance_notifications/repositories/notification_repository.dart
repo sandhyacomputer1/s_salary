@@ -1,5 +1,3 @@
-// lib/features/admin/attendance_notifications/repositories/notification_repository.dart
-
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/storage/secure_storage.dart';
@@ -31,7 +29,7 @@ class NotificationRepository {
       throw Exception('Company ID missing from session.');
     }
 
-    // 1. Fetch raw attendance records for today
+    // 1. Fetch records (already parsed as AdminAttendanceModel by the service)
     final rawRecords = await _service.fetchTodayAttendance(
       companyId: companyId,
       date: getTodayDateString(),
@@ -39,67 +37,70 @@ class NotificationRepository {
 
     if (rawRecords.isEmpty) return [];
 
-    // 2. Fetch all active employees to build a lookup map
-    // (We do this because the attendance API doesn't populate the employee name)
+    // 2. Fetch active employees to enrich names and departments
     List<Employee> employees = [];
     try {
       employees = await _employeeService.getEmployees(status: 'active');
     } catch (_) {
-      // If this fails, we still show the attendance, just without names
+      // Continue without names if the employee API fails
     }
 
     final employeeMap = {for (var e in employees) e.id: e};
 
-    // 3. Map the names to the attendance records
-    return rawRecords.map((record) {
-      final emp = employeeMap[record.employeeId];
+    // 3. Map the models safely
+    return rawRecords.map((model) {
+      // Find the matching employee
+      final emp = employeeMap[model.employeeId];
+
+      // Return a new model with enriched data if the employee exists
       if (emp != null) {
         return AdminAttendanceModel(
-          id: record.id,
-          employeeId: record.employeeId,
+          id: model.id,
+          employeeId: model.employeeId,
           employeeName: emp.name,
           employeeCode: emp.employeeCode,
-          date: record.date,
-          status: record.status,
-          isLate: record.isLate,
-          lateByMinutes: record.lateByMinutes,
-          checkInTime: record.checkInTime,
-          checkOutTime: record.checkOutTime,
+          date: model.date,
+          status: model.status,
+          isLate: model.isLate,
+          lateByMinutes: model.lateByMinutes,
+          checkInTime: model.checkInTime,
+          checkOutTime: model.checkOutTime,
+          // Enrich department from Employee Service if missing in attendance
+          department: model.department ?? emp.department,
+          checkInPhotoUrl: model.checkInPhotoUrl,
+          checkOutPhotoUrl: model.checkOutPhotoUrl,
+          distanceMeters: model.distanceMeters,
+          withinGeofence: model.withinGeofence,
+          workedHours: model.workedHours,
         );
       }
-      return record;
+
+      // If no employee match found, return the raw model
+      return model;
     }).toList();
   }
 }
 
-/// State notifier that handles polling every 30 seconds
 class TodayAttendanceNotifier extends AsyncNotifier<List<AdminAttendanceModel>> {
   Timer? _timer;
 
   @override
   Future<List<AdminAttendanceModel>> build() async {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      refresh();
-    });
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) => refresh());
+    ref.onDispose(() => _timer?.cancel());
 
-    ref.onDispose(() {
-      _timer?.cancel();
-    });
-
+    // We let exceptions bubble up so AsyncValue becomes AsyncError
     return ref.watch(notificationRepositoryProvider).getTodayRecords();
   }
 
   Future<void> refresh() async {
     if (state.isLoading) return;
-
     try {
       final data = await ref.read(notificationRepositoryProvider).getTodayRecords();
       state = AsyncData(data);
     } catch (e, st) {
-      if (!state.hasValue) {
-        state = AsyncError(e, st);
-      }
+      if (!state.hasValue) state = AsyncError(e, st);
     }
   }
 }

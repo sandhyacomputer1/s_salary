@@ -8,17 +8,13 @@ class TwoFactorScreen extends StatefulWidget {
   const TwoFactorScreen({super.key});
 
   @override
-  State<TwoFactorScreen> createState() =>
-      _TwoFactorScreenState();
+  State<TwoFactorScreen> createState() => _TwoFactorScreenState();
 }
 
-class _TwoFactorScreenState
-    extends State<TwoFactorScreen> {
-  final _otpController =
-  TextEditingController();
+class _TwoFactorScreenState extends State<TwoFactorScreen> {
+  final _otpController = TextEditingController();
 
-  final AuthService _authService =
-  AuthService();
+  final AuthService _authService = AuthService();
 
   bool _isLoading = false;
 
@@ -29,16 +25,12 @@ class _TwoFactorScreenState
   }
 
   Future<void> _verifyOTP() async {
-    final otp =
-    _otpController.text.trim();
+    final otp = _otpController.text.trim();
 
     if (otp.length != 6) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Please enter a 6-digit OTP',
-          ),
+          content: Text('Please enter a 6-digit OTP'),
         ),
       );
 
@@ -50,28 +42,22 @@ class _TwoFactorScreenState
     });
 
     try {
-      final tempToken =
-      await SecureStorage.getTempToken();
+      final tempToken = await SecureStorage.getTempToken();
 
-      if (tempToken == null ||
-          tempToken.isEmpty) {
+      if (tempToken == null || tempToken.isEmpty) {
         throw Exception(
           'Temporary token not found. Please login again.',
         );
       }
 
-      final data =
-      await _authService.verify2FA(
+      final data = await _authService.verify2FA(
         tempToken: tempToken,
         otpCode: otp,
       );
 
       await _saveSession(data);
 
-      final role =
-      data['user']?['role']
-          ?.toString()
-          .toLowerCase();
+      final role = data['user']?['role']?.toString().toLowerCase();
 
       await SecureStorage.clearTempToken();
 
@@ -99,47 +85,35 @@ class _TwoFactorScreenState
         _isLoading = false;
       });
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            e.toString().replaceFirst(
-              'Exception: ',
-              '',
-            ),
+            e.toString().replaceFirst('Exception: ', ''),
           ),
         ),
       );
     }
   }
 
-  Future<void> _saveSession(
-      Map<String, dynamic> data,
-      ) async {
-    final user =
-    Map<String, dynamic>.from(
-      data['user'] ?? {},
-    );
+  Future<void> _saveSession(Map<String, dynamic> data) async {
+    final user = Map<String, dynamic>.from(data['user'] ?? {});
 
-    final tokens =
-    Map<String, dynamic>.from(
-      data['tokens'] ?? {},
-    );
+    final tokens = Map<String, dynamic>.from(data['tokens'] ?? {});
 
-    final accessToken =
-    tokens['accessToken']?.toString();
+    final accessToken = tokens['accessToken']?.toString();
 
-    final refreshToken =
-    tokens['refreshToken']?.toString();
+    final refreshToken = tokens['refreshToken']?.toString();
 
-    final userId =
-    user['_id']?.toString();
+    final userId = user['_id']?.toString();
 
-    final role =
-    user['role']?.toString();
+    final role = user['role']?.toString();
 
-    final companyId =
-    user['companyId']?.toString();
+    final companyId = user['companyId']?.toString();
+
+    // Same as the normal login: employees need their employeeId,
+    // because the attendance API uses it
+    // (GET /attendance/employee/{employeeId}).
+    final employeeId = user['employeeId']?.toString();
 
     if (accessToken == null ||
         refreshToken == null ||
@@ -150,12 +124,20 @@ class _TwoFactorScreenState
       );
     }
 
+    if (role.toLowerCase() == 'employee' &&
+        (employeeId == null || employeeId.isEmpty)) {
+      throw Exception(
+        'Employee ID was not received.',
+      );
+    }
+
     await SecureStorage.saveLoginSession(
       accessToken: accessToken,
       refreshToken: refreshToken,
       userId: userId,
       role: role,
       companyId: companyId,
+      employeeId: employeeId,
     );
   }
 
@@ -163,22 +145,16 @@ class _TwoFactorScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Two-Factor Authentication',
-        ),
+        title: const Text('Two-Factor Authentication'),
       ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
-              constraints:
-              const BoxConstraints(
-                maxWidth: 420,
-              ),
+              constraints: const BoxConstraints(maxWidth: 420),
               child: Column(
-                crossAxisAlignment:
-                CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Icon(
                     Icons.security_outlined,
@@ -192,8 +168,7 @@ class _TwoFactorScreenState
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 26,
-                      fontWeight:
-                      FontWeight.bold,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
 
@@ -203,28 +178,21 @@ class _TwoFactorScreenState
                     'Enter the 6-digit OTP to continue.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color:
-                      Colors.grey.shade600,
+                      color: Colors.grey.shade600,
                     ),
                   ),
 
                   const SizedBox(height: 30),
 
                   TextField(
-                    controller:
-                    _otpController,
-                    keyboardType:
-                    TextInputType.number,
+                    controller: _otpController,
+                    keyboardType: TextInputType.number,
                     maxLength: 6,
-                    textAlign:
-                    TextAlign.center,
-                    decoration:
-                    const InputDecoration(
+                    textAlign: TextAlign.center,
+                    decoration: const InputDecoration(
                       labelText: 'OTP Code',
                       hintText: '123456',
-                      prefixIcon:
-                      Icon(Icons
-                          .password),
+                      prefixIcon: Icon(Icons.password),
                     ),
                   ),
 
@@ -232,26 +200,19 @@ class _TwoFactorScreenState
 
                   SizedBox(
                     height: 52,
-                    child:
-                    ElevatedButton(
-                      onPressed:
-                      _isLoading
-                          ? null
-                          : _verifyOTP,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _verifyOTP,
                       child: _isLoading
                           ? const SizedBox(
                         height: 24,
                         width: 24,
-                        child:
-                        CircularProgressIndicator(),
+                        child: CircularProgressIndicator(),
                       )
                           : const Text(
                         'Verify OTP',
-                        style:
-                        TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
-                          fontWeight:
-                          FontWeight.bold,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
