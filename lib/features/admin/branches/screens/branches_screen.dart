@@ -7,7 +7,13 @@ import '../widgets/branch_form.dart';
 import '../widgets/branch_list.dart';
 
 class BranchesScreen extends StatefulWidget {
-  const BranchesScreen({super.key});
+  /// True when shown inside the admin dashboard (the sidebar stays visible).
+  final bool embedded;
+
+  const BranchesScreen({
+    super.key,
+    this.embedded = false,
+  });
 
   @override
   State<BranchesScreen> createState() => _BranchesScreenState();
@@ -106,6 +112,18 @@ class _BranchesScreenState extends State<BranchesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The core body content
+    final bodyContent = SafeArea(child: _buildContent());
+
+    // Embedded: return only the body so the dashboard shell stays visible
+    if (widget.embedded) {
+      return Container(
+        color: _pageBg,
+        child: bodyContent,
+      );
+    }
+
+    // Standalone: full screen with its own Scaffold and AppBar
     return Scaffold(
       backgroundColor: _pageBg,
       appBar: AppBar(
@@ -135,7 +153,7 @@ class _BranchesScreenState extends State<BranchesScreen> {
           const SizedBox(width: 6),
         ],
       ),
-      body: SafeArea(child: _buildContent()),
+      body: bodyContent,
     );
   }
 

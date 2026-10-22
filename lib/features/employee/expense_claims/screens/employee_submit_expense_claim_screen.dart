@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 
 // ⚠️ Fix to your real AppRoutes location.
 import '../../../../core/routes/app_routes.dart';
-import '../models/expense_claim_summary_model.dart';
+import '../models/expense_claim_model.dart';
 import '../repositories/expense_claim_repository.dart';
 import '../utils/expense_colors.dart';
 import '../widgets/expense_claim_form.dart';
-import '../widgets/expense_claim_summary_cards.dart';
+import '../widgets/expense_claim_summary_strip.dart';
 
 class EmployeeSubmitExpenseClaimScreen extends StatefulWidget {
   /// When true, this screen is rendered inside the dashboard shell,
@@ -42,7 +42,8 @@ class _EmployeeSubmitExpenseClaimScreenState
 
   bool _isSubmitting = false;
   bool _summaryLoading = true;
-  ExpenseClaimSummaryModel? _summary;
+  List<ExpenseClaimModel> _claims = [];
+  bool _summaryLoaded = false;
 
   @override
   void initState() {
@@ -56,7 +57,8 @@ class _EmployeeSubmitExpenseClaimScreenState
       final result = await _repository.getMyClaims();
       if (!mounted) return;
       setState(() {
-        _summary = result.summary;
+        _claims = result.claims;
+        _summaryLoaded = true;
         _summaryLoading = false;
       });
     } catch (_) {
@@ -151,8 +153,6 @@ class _EmployeeSubmitExpenseClaimScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildHeader(mobile),
-                SizedBox(height: mobile ? 14 : 20),
                 if (_summaryLoading)
                   const Padding(
                     padding: EdgeInsets.only(bottom: 16),
@@ -162,8 +162,8 @@ class _EmployeeSubmitExpenseClaimScreenState
                       backgroundColor: ExpenseColors.primaryTint,
                     ),
                   )
-                else if (_summary != null) ...[
-                  ExpenseClaimSummaryCards(summary: _summary!),
+                else if (_summaryLoaded) ...[
+                  ExpenseClaimSummaryStrip(items: _summaryItems()),
                   SizedBox(height: mobile ? 14 : 20),
                 ],
                 _buildFormCard(mobile),
@@ -203,31 +203,66 @@ class _EmployeeSubmitExpenseClaimScreenState
   }
 
   // ==========================================================
-  // PAGE HEADER
+  // SUMMARY (computed from the claims list)
   // ==========================================================
 
-  Widget _buildHeader(bool mobile) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Expense Claims',
-          style: TextStyle(
-            fontSize: mobile ? 22 : 27,
-            fontWeight: FontWeight.w700,
-            color: ExpenseColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Submit a new claim and track your reimbursements.',
-          style: TextStyle(
-            fontSize: mobile ? 13 : 14,
-            color: Colors.grey.shade600,
-          ),
-        ),
-      ],
+  ExpenseSummaryItem _summaryItem(
+      String label,
+      ExpenseClaimStatus? status,
+      IconData icon,
+      Color color,
+      ) {
+    final list = status == null
+        ? _claims
+        : _claims.where((c) => c.status == status).toList();
+
+    var total = 0.0;
+    for (final c in list) {
+      total += c.amount.toDouble();
+    }
+
+    return ExpenseSummaryItem(
+      label: label,
+      amount: total,
+      count: list.length,
+      icon: icon,
+      color: color,
     );
+  }
+
+  List<ExpenseSummaryItem> _summaryItems() {
+    return [
+      _summaryItem(
+        'Total Claimed',
+        null,
+        Icons.receipt_long_outlined,
+        ExpenseColors.primary,
+      ),
+      _summaryItem(
+        'Pending',
+        ExpenseClaimStatus.pending,
+        Icons.schedule_rounded,
+        const Color(0xFFB26A00),
+      ),
+      _summaryItem(
+        'Approved',
+        ExpenseClaimStatus.approved,
+        Icons.check_circle_outline_rounded,
+        ExpenseColors.success,
+      ),
+      _summaryItem(
+        'Reimbursed',
+        ExpenseClaimStatus.reimbursed,
+        Icons.payments_outlined,
+        const Color(0xFF2563EB),
+      ),
+      _summaryItem(
+        'Rejected',
+        ExpenseClaimStatus.rejected,
+        Icons.cancel_outlined,
+        ExpenseColors.danger,
+      ),
+    ];
   }
 
   // ==========================================================

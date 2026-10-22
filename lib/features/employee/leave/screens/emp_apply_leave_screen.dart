@@ -7,7 +7,7 @@ import '../models/emp_leave_model.dart';
 import '../services/emp_leave_service.dart';
 import '../widgets/emp_leave_balance_card.dart';
 import '../widgets/emp_leave_form.dart';
-import '../widgets/emp_leave_history_card.dart';
+import 'emp_leave_list_screen.dart';
 
 class EmpApplyLeaveScreen extends StatefulWidget {
   /// Set to true when shown inside the employee shell (no AppBar of its own).
@@ -24,20 +24,17 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
   final ScrollController _scrollController = ScrollController();
 
   List<EmpLeaveBalanceModel> _balances = [];
-  List<EmpLeaveModel> _history = [];
 
   bool _isLoading = true;
   bool _isSubmitting = false;
   bool _showSuccess = false;
 
   String? _balancesError;
-  String? _historyError;
 
   Timer? _successTimer;
 
   // Palette (same as the admin screens)
   static const Color primary = Color(0xFFE96832);
-  static const Color primaryTint = Color(0xFFFFEEE7);
   static const Color pageBg = Color(0xFFF7F8FA);
   static const Color textDark = Color(0xFF18212F);
   static const Color textMedium = Color(0xFF4B5563);
@@ -47,9 +44,6 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
   static const Color successLight = Color(0xFFE7F7EF);
 
   static const double _mobileBreakpoint = 700;
-
-  /// Width from which form and history sit side by side.
-  static const double _wideBreakpoint = 1000;
 
   /// Max width of the page content.
   /// double.infinity = fill the screen. Use e.g. 1600 to limit it on
@@ -100,29 +94,10 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
     }
   }
 
-  Future<void> _fetchHistory() async {
-    try {
-      final data = await _service.getLeaveHistory();
-      if (!mounted) return;
-      setState(() {
-        _history = data;
-        _historyError = null;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _historyError = _messageOf(e));
-    }
-  }
-
   Future<void> _loadAll() async {
-    await Future.wait([_fetchBalances(), _fetchHistory()]);
+    await _fetchBalances();
     if (!mounted) return;
     setState(() => _isLoading = false);
-  }
-
-  Future<void> _retry() async {
-    setState(() => _isLoading = true);
-    await _loadAll();
   }
 
   // ============================================================
@@ -163,7 +138,7 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
       );
     }
 
-    // Refresh balances and history from the backend.
+    // Refresh balances from the backend.
     await _loadAll();
 
     return true;
@@ -179,6 +154,19 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
         content: Text(message),
       ),
     );
+  }
+
+  // ============================================================
+  // VIEW ALL LEAVES
+  // ============================================================
+
+  Future<void> _openAllLeaves() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const EmpLeaveListScreen()),
+    );
+
+    // Balances may have changed (e.g. a leave was approved meanwhile).
+    if (mounted) _loadAll();
   }
 
   // ============================================================
@@ -226,15 +214,6 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
 
     final width = MediaQuery.of(context).size.width;
     final mobile = width < _mobileBreakpoint;
-    final wide = width >= _wideBreakpoint;
-
-    final form = EmpLeaveForm(
-      balances: _balances,
-      isSubmitting: _isSubmitting,
-      onSubmit: _submitLeave,
-    );
-
-    final history = _buildHistorySection(mobile);
 
     return RefreshIndicator(
       color: primary,
@@ -255,59 +234,22 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildPageHeader(mobile),
-                SizedBox(height: mobile ? 14 : 20),
                 _buildSuccessBanner(),
                 _buildSectionTitle('Leave Balance', mobile),
                 _buildBalances(mobile),
                 SizedBox(height: mobile ? 18 : 24),
-                if (wide)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 5, child: form),
-                      const SizedBox(width: 20),
-                      Expanded(flex: 4, child: history),
-                    ],
-                  )
-                else ...[
-                  form,
-                  SizedBox(height: mobile ? 18 : 24),
-                  history,
-                ],
+                EmpLeaveForm(
+                  balances: _balances,
+                  isSubmitting: _isSubmitting,
+                  onSubmit: _submitLeave,
+                ),
+                SizedBox(height: mobile ? 14 : 16),
+                _buildViewAllButton(mobile),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-
-  // ============================================================
-  // PAGE HEADER
-  // ============================================================
-
-  Widget _buildPageHeader(bool mobile) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Apply Leave',
-          style: TextStyle(
-            fontSize: mobile ? 22 : 27,
-            fontWeight: FontWeight.w700,
-            color: textDark,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Check your balance, request time off and track your applications.',
-          style: TextStyle(
-            fontSize: mobile ? 13 : 14,
-            color: Colors.grey.shade600,
-          ),
-        ),
-      ],
     );
   }
 
@@ -413,114 +355,32 @@ class _EmpApplyLeaveScreenState extends State<EmpApplyLeaveScreen> {
   }
 
   // ============================================================
-  // HISTORY SECTION
+  // VIEW ALL LEAVES BUTTON
   // ============================================================
 
-  Widget _buildHistorySection(bool mobile) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildHistoryHeader(mobile),
-        const SizedBox(height: 12),
-        ..._buildHistoryContent(),
-      ],
-    );
-  }
-
-  Widget _buildHistoryHeader(bool mobile) {
-    return Container(
-      padding: EdgeInsets.all(mobile ? 12 : 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: border),
-        boxShadow: _cardShadow,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: primaryTint,
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: const Icon(
-              Icons.event_note_outlined,
-              size: 18,
-              color: primary,
-            ),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Leave Applications',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: textDark,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'Real-time log of your requests',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11.5, color: textLight),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: primaryTint,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '${_history.length}',
-              style: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: primary,
-              ),
-            ),
-          ),
-        ],
+  Widget _buildViewAllButton(bool mobile) {
+    final button = OutlinedButton.icon(
+      onPressed: _isSubmitting ? null : _openAllLeaves,
+      icon: const Icon(Icons.list_alt_outlined, size: 18),
+      label: const Text('View All Leaves'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: primary,
+        side: const BorderSide(color: primary),
+        minimumSize: Size(mobile ? double.infinity : 200, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
       ),
     );
-  }
 
-  List<Widget> _buildHistoryContent() {
-    if (_historyError != null && _history.isEmpty) {
-      return [
-        _ErrorCard(message: _historyError!, onRetry: _retry),
-      ];
-    }
+    if (mobile) return button;
 
-    if (_history.isEmpty) {
-      return const [
-        _NoticeCard(
-          icon: Icons.event_note_outlined,
-          message:
-          'No leave applications yet. Your submitted requests will appear here.',
-        ),
-      ];
-    }
-
-    return [
-      for (final leave in _history)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: EmpLeaveHistoryCard(leave: leave),
-        ),
-    ];
+    return Align(
+      alignment: Alignment.centerRight,
+      child: button,
+    );
   }
 }
 
@@ -552,71 +412,6 @@ class _NoticeCard extends StatelessWidget {
                 fontSize: 13.5,
                 color: _EmpApplyLeaveScreenState.textMedium,
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorCard extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-
-  const _ErrorCard({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _EmpApplyLeaveScreenState.border),
-        boxShadow: _EmpApplyLeaveScreenState._cardShadow,
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF1F1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.error_outline_rounded,
-              size: 28,
-              color: Color(0xFFDC2626),
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Unable to load leave applications',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: _EmpApplyLeaveScreenState.textDark,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 13,
-              color: _EmpApplyLeaveScreenState.textMedium,
-            ),
-          ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Try Again'),
-            style: FilledButton.styleFrom(
-              backgroundColor: _EmpApplyLeaveScreenState.primary,
             ),
           ),
         ],

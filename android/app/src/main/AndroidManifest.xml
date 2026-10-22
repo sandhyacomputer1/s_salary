@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
@@ -8,6 +8,7 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
+        <!-- Fixed the typo here -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyCcABdxulsH8Ds7NKE-fVSynsNz8VZW7NM" />

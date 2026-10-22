@@ -5,21 +5,12 @@ import '../widgets/calendar_event_card.dart';
 import '../widgets/calendar_grid.dart';
 import '../widgets/calendar_header.dart';
 import '../../../../data/services/calendar_service.dart';
-// =================================================================
-// ADMIN CALENDAR SCREEN
-//
-// Monthly calendar for the Admin Dashboard. Shows attendance,
-// leave, holiday and shift events (once wired to real services)
-// for a selected date, next to or below the calendar depending
-// on screen width.
-//
-// This screen does NOT call any API yet — see _loadEventsForMonth
-// below for exactly where to plug that in once the relevant
-// services (attendance / leave / shift / holiday) are available.
-// =================================================================
 
 class CalendarScreen extends StatefulWidget {
-  const CalendarScreen({super.key});
+  /// True when shown inside the admin dashboard (the sidebar stays visible).
+  final bool embedded;
+
+  const CalendarScreen({super.key, this.embedded = false});
 
   @override
   State<CalendarScreen> createState() => _CalendarScreenState();
@@ -29,15 +20,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
   // ==========================================================
   // BREAKPOINTS
   // ==========================================================
-  final CalendarService _calendarService =
-  CalendarService();
+  final CalendarService _calendarService = CalendarService();
+
   static const double _mobileBreakpoint = 700;
   static const double _sideBySideBreakpoint = 900;
 
   bool get _isMobile => MediaQuery.of(context).size.width < _mobileBreakpoint;
 
   // ==========================================================
-  // COLORS — same palette used across the S Salary admin screens
+  // COLORS
   // ==========================================================
 
   static const Color _primary = Color(0xFFE96832);
@@ -56,10 +47,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   late DateTime _displayedMonth;
   late DateTime _selectedDate;
 
-  /// Events for the currently displayed month. Empty until this
-  /// is wired to real services — see _loadEventsForMonth().
   List<CalendarEvent> _events = [];
-
   bool _isLoadingEvents = false;
 
   // ==========================================================
@@ -81,31 +69,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   // ==========================================================
   // LOAD EVENTS
-  //
-  // Deliberately empty for now — no endpoints have been given
-  // for attendance / leave / shift / holiday data. Wire it up
-  // like this once those services exist:
-  //
-  //   final results = await Future.wait([
-  //     _attendanceService.getMonthlyAttendance(month: _displayedMonth),
-  //     _leaveService.getMonthlyLeaves(month: _displayedMonth),
-  //     _shiftService.getMonthlyShifts(month: _displayedMonth),
-  //     _holidayService.getHolidays(month: _displayedMonth),
-  //   ]);
-  //
-  //   final merged = <CalendarEvent>[
-  //     ...(results[0] as List).map((json) => CalendarEvent.fromJson(json)),
-  //     ...(results[1] as List).map((json) => CalendarEvent.fromJson(json)),
-  //     ...(results[2] as List).map((json) => CalendarEvent.fromJson(json)),
-  //     ...(results[3] as List).map((json) => CalendarEvent.fromJson(json)),
-  //   ];
-  //
-  //   setState(() => _events = merged);
   // ==========================================================
 
-  Future<void> _loadEventsForMonth(
-      DateTime month,
-      ) async {
+  Future<void> _loadEventsForMonth(DateTime month) async {
     if (!mounted) return;
 
     setState(() {
@@ -113,8 +79,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
 
     try {
-      final events =
-      await _calendarService.getMonthlyEvents(
+      final events = await _calendarService.getMonthlyEvents(
         month: month,
       );
 
@@ -125,9 +90,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _isLoadingEvents = false;
       });
     } catch (e) {
-      debugPrint(
-        'CALENDAR LOAD ERROR: $e',
-      );
+      debugPrint('CALENDAR LOAD ERROR: $e');
 
       if (!mounted) return;
 
@@ -146,6 +109,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       );
     }
   }
+
   // ==========================================================
   // NAVIGATION
   // ==========================================================
@@ -233,49 +197,59 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     final mobile = _isMobile;
 
+    // Core scrollable body content
+    final bodyContent = SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        mobile ? 14 : 24,
+        mobile ? 16 : 22,
+        mobile ? 14 : 24,
+        24,
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final sideBySide = constraints.maxWidth >= _sideBySideBreakpoint;
+
+          final calendarCard = _buildCalendarCard(mobile);
+          final eventsCard = _buildEventsPanel(mobile);
+
+          if (sideBySide) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 3, child: calendarCard),
+                const SizedBox(width: 16),
+                Expanded(flex: 2, child: eventsCard),
+              ],
+            );
+          }
+
+          return Column(
+            children: [
+              calendarCard,
+              const SizedBox(height: 16),
+              eventsCard,
+            ],
+          );
+        },
+      ),
+    );
+
+    // Embedded: return only the body so the dashboard shell stays visible
+    if (widget.embedded) {
+      return Container(
+        color: _pageBg,
+        child: bodyContent,
+      );
+    }
+
+    // Standalone: full screen with its own custom header
     return Scaffold(
       backgroundColor: _pageBg,
       body: SafeArea(
         child: Column(
           children: [
             _buildPageHeader(mobile),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  mobile ? 14 : 24,
-                  mobile ? 16 : 22,
-                  mobile ? 14 : 24,
-                  24,
-                ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final sideBySide = constraints.maxWidth >= _sideBySideBreakpoint;
-
-                    final calendarCard = _buildCalendarCard(mobile);
-                    final eventsCard = _buildEventsPanel(mobile);
-
-                    if (sideBySide) {
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 3, child: calendarCard),
-                          const SizedBox(width: 16),
-                          Expanded(flex: 2, child: eventsCard),
-                        ],
-                      );
-                    }
-
-                    return Column(
-                      children: [
-                        calendarCard,
-                        const SizedBox(height: 16),
-                        eventsCard,
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
+            Expanded(child: bodyContent),
           ],
         ),
       ),
@@ -283,7 +257,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   // ==========================================================
-  // PAGE HEADER — same shape as the other admin screens
+  // PAGE HEADER (Only used when standalone)
   // ==========================================================
 
   Widget _buildPageHeader(bool mobile) {

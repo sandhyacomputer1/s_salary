@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
 // ⚠️ Fix to your real AppRoutes location.
@@ -286,8 +287,6 @@ class _EmployeeExpenseClaimsScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildHeader(mobile),
-                SizedBox(height: mobile ? 14 : 20),
                 _buildFilterMenu(mobile),
                 SizedBox(height: mobile ? 12 : 16),
                 if (visible.isEmpty)
@@ -303,69 +302,49 @@ class _EmployeeExpenseClaimsScreenState
   }
 
   // ==========================================================
-  // PAGE HEADER
-  // ==========================================================
-
-  Widget _buildHeader(bool mobile) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Claim History',
-          style: TextStyle(
-            fontSize: mobile ? 22 : 27,
-            fontWeight: FontWeight.w700,
-            color: ExpenseColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          _claims.length == 1
-              ? '1 claim submitted by you.'
-              : '${_claims.length} claims submitted by you.',
-          style: TextStyle(
-            fontSize: mobile ? 13 : 14,
-            color: Colors.grey.shade600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ==========================================================
   // FILTER MENU (pill style, separate card)
   // ==========================================================
 
   Widget _buildFilterMenu(bool mobile) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(mobile ? 6 : 8),
+      padding: EdgeInsets.all(mobile ? 4 : 5),
       decoration: BoxDecoration(
         color: ExpenseColors.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: ExpenseColors.border),
         boxShadow: ExpenseColors.cardShadow,
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _filterPill(
-              'All',
-              _claims.length,
-              _filter == null,
-                  () => setState(() => _filter = null),
-              mobile,
-            ),
-            for (final s in _filterOptions)
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(
+          dragDevices: {
+            PointerDeviceKind.touch,
+            PointerDeviceKind.mouse,
+            PointerDeviceKind.trackpad,
+          },
+          scrollbars: false,
+        ),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
               _filterPill(
-                s.label,
-                _claims.where((c) => c.status == s).length,
-                _filter == s,
-                    () => setState(() => _filter = s),
+                'All',
+                _claims.length,
+                _filter == null,
+                    () => setState(() => _filter = null),
                 mobile,
               ),
-          ],
+              for (final s in _filterOptions)
+                _filterPill(
+                  s.label,
+                  _claims.where((c) => c.status == s).length,
+                  _filter == s,
+                      () => setState(() => _filter = s),
+                  mobile,
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -381,7 +360,7 @@ class _EmployeeExpenseClaimsScreenState
     final fg = selected ? Colors.white : ExpenseColors.textSecondary;
 
     return Padding(
-      padding: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.only(right: 4),
       child: Material(
         color: selected ? ExpenseColors.primary : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
@@ -390,8 +369,8 @@ class _EmployeeExpenseClaimsScreenState
           onTap: onTap,
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: mobile ? 12 : 16,
-              vertical: mobile ? 9 : 10,
+              horizontal: mobile ? 10 : 12,
+              vertical: mobile ? 6 : 7,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -399,16 +378,16 @@ class _EmployeeExpenseClaimsScreenState
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: mobile ? 12.5 : 13.5,
+                    fontSize: mobile ? 12 : 13,
                     fontWeight: FontWeight.w600,
                     color: fg,
                   ),
                 ),
-                const SizedBox(width: 7),
+                const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 1.5,
+                    horizontal: 6,
+                    vertical: 1,
                   ),
                   decoration: BoxDecoration(
                     color: selected
@@ -419,7 +398,7 @@ class _EmployeeExpenseClaimsScreenState
                   child: Text(
                     '$count',
                     style: TextStyle(
-                      fontSize: 11.5,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: fg,
                     ),

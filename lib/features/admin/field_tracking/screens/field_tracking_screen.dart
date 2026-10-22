@@ -12,7 +12,13 @@ import '../widgets/field_tracking_format.dart';
 import '../widgets/location_history_map.dart';
 
 class FieldTrackingScreen extends StatefulWidget {
-  const FieldTrackingScreen({super.key});
+  /// True when shown inside the admin dashboard (the sidebar stays visible).
+  final bool embedded;
+
+  const FieldTrackingScreen({
+    super.key,
+    this.embedded = false,
+  });
 
   @override
   State<FieldTrackingScreen> createState() => _FieldTrackingScreenState();
@@ -26,8 +32,7 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
   static const Color _border = Color(0xFFE5E7EB);
   static const Color _pageBg = Color(0xFFF7F8FA);
 
-  /// How often the ADMIN map re-reads locations. This is unrelated to the
-  /// employees' own ~10-minute location pings.
+  /// How often the ADMIN map re-reads locations.
   static const Duration _refreshInterval = Duration(seconds: 30);
 
   static const double _wideBreakpoint = 900;
@@ -93,7 +98,6 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
     super.dispose();
   }
 
-  /// Pause polling while the app is in the background; refresh once on return.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final active = state == AppLifecycleState.resumed;
@@ -117,7 +121,6 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
     _timer = Timer.periodic(_refreshInterval, (_) {
       if (!mounted) return;
 
-      // Skip ticks while another screen is on top of this one.
       final route = ModalRoute.of(context);
       if (route != null && !route.isCurrent) return;
 
@@ -136,7 +139,7 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
     Navigator.pushNamedAndRemoveUntil(
       context,
       AppRoutes.login,
-      (route) => false,
+          (route) => false,
     );
   }
 
@@ -166,7 +169,6 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
         _error = null;
         _refreshError = null;
 
-        // The selected employee may no longer be a field employee.
         if (_selectedId != null && !list.any((e) => e.id == _selectedId)) {
           _selectedId = null;
           _history = null;
@@ -176,7 +178,6 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
         }
       });
 
-      // Keep today's route up to date. Past dates never change.
       if (_selectedId != null && _isToday) {
         await _loadHistory(silent: true);
       }
@@ -188,7 +189,6 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
         return;
       }
 
-      // Keep whatever was loaded before; only report the failure.
       setState(() {
         _loading = false;
         if (_employees.isEmpty) {
@@ -249,7 +249,6 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
 
       setState(() {
         _historyLoading = false;
-        // A failed background refresh keeps the route already on screen.
         if (!silent) _historyError = e.message;
       });
     } catch (_) {
@@ -339,6 +338,26 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
 
   @override
   Widget build(BuildContext context) {
+    // The core body layout
+    final bodyContent = SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return constraints.maxWidth >= _wideBreakpoint
+              ? _wideLayout(constraints)
+              : _narrowLayout();
+        },
+      ),
+    );
+
+    // Embedded: return only the body so the dashboard shell stays visible
+    if (widget.embedded) {
+      return Container(
+        color: _pageBg,
+        child: bodyContent,
+      );
+    }
+
+    // Standalone: full screen with its own Scaffold and AppBar
     return Scaffold(
       backgroundColor: _pageBg,
       appBar: AppBar(
@@ -354,15 +373,7 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
           ),
         ),
       ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return constraints.maxWidth >= _wideBreakpoint
-                ? _wideLayout(constraints)
-                : _narrowLayout();
-          },
-        ),
-      ),
+      body: bodyContent,
     );
   }
 
@@ -481,7 +492,7 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
         const SizedBox(height: 4),
         Text(
           'Automatic 10-minute location pings and route history for '
-          'field personnel',
+              'field personnel',
           style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
         ),
       ],
@@ -515,10 +526,10 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
       onPressed: _refreshing ? null : () => _refreshAll(),
       icon: _refreshing
           ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      )
           : const Icon(Icons.refresh_rounded, size: 18),
       label: const Text('Refresh Now'),
       style: OutlinedButton.styleFrom(
@@ -618,7 +629,7 @@ class _FieldTrackingScreenState extends State<FieldTrackingScreen>
                 Expanded(
                   child: Text(
                     'Could not refresh: $_refreshError '
-                    'Showing the last loaded data.',
+                        'Showing the last loaded data.',
                     style: const TextStyle(
                       fontSize: 12.5,
                       color: Color(0xFF92400E),

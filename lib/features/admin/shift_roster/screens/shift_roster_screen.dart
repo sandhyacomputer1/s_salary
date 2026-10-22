@@ -11,16 +11,14 @@ import '../widgets/edit_shift_dialog.dart';
 import '../widgets/roster_table.dart';
 import '../widgets/shift_card.dart';
 
-// =================================================================
-// SHIFT ROSTER & PLANNER SCREEN
-//
-// Screen -> Service -> ApiClient -> Backend. This file never calls
-// ApiClient directly — all network calls go through
-// ShiftRosterService / EmployeeService.
-// =================================================================
-
 class ShiftRosterScreen extends StatefulWidget {
-  const ShiftRosterScreen({super.key});
+  /// True when shown inside the admin dashboard (the sidebar stays visible).
+  final bool embedded;
+
+  const ShiftRosterScreen({
+    super.key,
+    this.embedded = false,
+  });
 
   @override
   State<ShiftRosterScreen> createState() => _ShiftRosterScreenState();
@@ -108,9 +106,6 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
     });
 
     try {
-      // Shifts and Employees hit CONFIRMED endpoints (GET /shifts,
-      // GET /employees) — if either of these fails, something is
-      // genuinely wrong and the screen shows the error state.
       final results = await Future.wait([
         _shiftRosterService.getShifts(),
         _employeeService.getEmployees(status: 'active'),
@@ -121,11 +116,6 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
       final shifts = results[0] as List<ShiftModel>;
       final employees = results[1] as List<Employee>;
 
-      // Roster schedules use an UNCONFIRMED endpoint (see
-      // ShiftRosterService.getRosterSchedules — no matching route
-      // was found in your API docs). Load it separately so a 404
-      // there just leaves the roster table empty instead of taking
-      // down the shifts list too.
       List<RosterScheduleModel> rosterSchedules = [];
 
       try {
@@ -158,12 +148,6 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
     setState(() => _shifts = shifts);
   }
 
-  /// Re-fetches roster schedules. Since the underlying endpoint is
-  /// UNCONFIRMED (see ShiftRosterService.getRosterSchedules), a
-  /// failure here just leaves the roster table as-is rather than
-  /// throwing back into whatever action (assign / delete) triggered
-  /// this refresh — that action should still be able to report its
-  /// own success/failure independently.
   Future<void> _reloadRosterSchedules() async {
     try {
       final schedules = await _shiftRosterService.getRosterSchedules();
@@ -323,11 +307,6 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // ONE bulk request, not one call per employee. Confirmed from
-      // the console: calling this once per employee with a singular
-      // 'employeeId' made the backend's own validation reply
-      // "Please select at least one employee." on every call — it
-      // expects the full list in a single 'employeeIds' array.
       await _shiftRosterService.assignRoster({
         'shiftId': shiftId,
         'employeeIds': employeeIds,
@@ -438,43 +417,53 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
   Widget build(BuildContext context) {
     final mobile = _isMobile;
 
+    // Core body content
+    final bodyContent = _isLoading
+        ? const Center(
+      child: CircularProgressIndicator(color: _primary),
+    )
+        : _errorMessage != null
+        ? _buildErrorState()
+        : RefreshIndicator(
+      color: _primary,
+      onRefresh: _loadAll,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          mobile ? 14 : 24,
+          mobile ? 16 : 22,
+          mobile ? 14 : 24,
+          30,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildPageHeader(mobile),
+            SizedBox(height: mobile ? 18 : 24),
+            _buildShiftsSection(mobile),
+            SizedBox(height: mobile ? 20 : 28),
+            _buildRosterSection(mobile),
+          ],
+        ),
+      ),
+    );
+
+    // Embedded: return only the body so the dashboard shell stays visible
+    if (widget.embedded) {
+      return Container(
+        color: _pageBg,
+        child: bodyContent,
+      );
+    }
+
+    // Standalone: full screen with its own custom top bar
     return Scaffold(
       backgroundColor: _pageBg,
       body: SafeArea(
         child: Column(
           children: [
             _buildTopBar(mobile),
-            Expanded(
-              child: _isLoading
-                  ? const Center(
-                child: CircularProgressIndicator(color: _primary),
-              )
-                  : _errorMessage != null
-                  ? _buildErrorState()
-                  : RefreshIndicator(
-                color: _primary,
-                onRefresh: _loadAll,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(
-                    mobile ? 14 : 24,
-                    mobile ? 16 : 22,
-                    mobile ? 14 : 24,
-                    30,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildPageHeader(mobile),
-                      SizedBox(height: mobile ? 18 : 24),
-                      _buildShiftsSection(mobile),
-                      SizedBox(height: mobile ? 20 : 28),
-                      _buildRosterSection(mobile),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            Expanded(child: bodyContent),
           ],
         ),
       ),
@@ -482,7 +471,7 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
   }
 
   // ==========================================================
-  // TOP BAR
+  // TOP BAR (Only used when standalone)
   // ==========================================================
 
   Widget _buildTopBar(bool mobile) {

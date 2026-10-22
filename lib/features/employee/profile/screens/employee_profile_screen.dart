@@ -197,8 +197,6 @@ class _Content extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _PageHeader(mobile: mobile),
-              SizedBox(height: mobile ? 14 : 20),
               ProfileHeaderCard(
                 name: user.name,
                 email: user.email,
@@ -209,56 +207,18 @@ class _Content extends StatelessWidget {
                 status: emp.status,
                 onEditAll: onEditAll,
               ),
-              SizedBox(height: mobile ? 14 : 20),_TabMenu(
+              SizedBox(height: mobile ? 14 : 20),
+              _TabMenu(
                 selectedIndex: tabIndex,
                 onChanged: onTabChanged,
                 mobile: mobile,
               ),
-              const SizedBox(height: 14),
-              tabBody,
               SizedBox(height: mobile ? 14 : 20),
-              Align(
-                alignment: Alignment.topLeft,
-                child: tabBody,
-              ),
+              tabBody,
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-// ==============================================================
-// PAGE HEADER
-// ==============================================================
-
-class _PageHeader extends StatelessWidget {
-  final bool mobile;
-  const _PageHeader({required this.mobile});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'My Profile',
-          style: TextStyle(
-            fontSize: mobile ? 22 : 27,
-            fontWeight: FontWeight.w700,
-            color: ProfileColors.textDark,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'View and manage your personal, bank and employment details.',
-          style: TextStyle(
-            fontSize: mobile ? 13 : 14,
-            color: Colors.grey.shade600,
-          ),
-        ),
-      ],
     );
   }
 }

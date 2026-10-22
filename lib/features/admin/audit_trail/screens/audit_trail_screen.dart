@@ -8,7 +8,11 @@ import '../widgets/audit_filter_bar.dart';
 import '../widgets/audit_pagination.dart';
 
 class AuditTrailScreen extends StatefulWidget {
-  const AuditTrailScreen({super.key});
+  /// True when shown inside the admin dashboard (the sidebar stays visible).
+  /// The dashboard already provides the Scaffold and AppBar.
+  final bool embedded;
+
+  const AuditTrailScreen({super.key, this.embedded = false});
 
   @override
   State<AuditTrailScreen> createState() => _AuditTrailScreenState();
@@ -130,6 +134,59 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
   Widget build(BuildContext context) {
     final mobile = _isMobile;
 
+    final body = SafeArea(
+      child: RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            mobile ? 14 : 22,
+            mobile ? 16 : 22,
+            mobile ? 14 : 22,
+            35,
+          ),
+          children: [
+            Text(
+              'Company Admin  /  Security Audit Trail',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(mobile ? 14 : 28),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _header(),
+                  const SizedBox(height: 20),
+                  AuditFilterBar(
+                    search: _query.search,
+                    action: _query.action,
+                    status: _query.status,
+                    busy: _requesting,
+                    onSearch: _onSearch,
+                  ),
+                  const SizedBox(height: 18),
+                  _results(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // Inside the admin dashboard: body only, the sidebar stays visible.
+    if (widget.embedded) {
+      return Container(color: _pageBg, child: body);
+    }
+
+    // Standalone: own Scaffold and AppBar.
     return Scaffold(
       backgroundColor: _pageBg,
       appBar: AppBar(
@@ -153,52 +210,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           const SizedBox(width: 6),
         ],
       ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refresh,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(
-              mobile ? 14 : 22,
-              mobile ? 16 : 22,
-              mobile ? 14 : 22,
-              35,
-            ),
-            children: [
-              Text(
-                'Company Admin  /  Security Audit Trail',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(mobile ? 14 : 28),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _header(),
-                    const SizedBox(height: 20),
-                    AuditFilterBar(
-                      search: _query.search,
-                      action: _query.action,
-                      status: _query.status,
-                      busy: _requesting,
-                      onSearch: _onSearch,
-                    ),
-                    const SizedBox(height: 18),
-                    _results(),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      body: body,
     );
   }
 
@@ -207,7 +219,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
     final total = _data?.total;
     final suffix = total == null ? '' : ' ($total total events)';
 
-    return Column(
+    final titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
@@ -223,6 +235,32 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           'System-wide security events, authentication challenges, IP logs, '
               'and administrative changes$suffix.',
           style: TextStyle(fontSize: 13.5, color: Colors.grey.shade600),
+        ),
+      ],
+    );
+
+    // The AppBar refresh button is not there when embedded,
+    // so the header gets its own.
+    if (!widget.embedded) return titleBlock;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: titleBlock),
+        const SizedBox(width: 12),
+        OutlinedButton.icon(
+          onPressed: _requesting ? null : _refresh,
+          icon: const Icon(Icons.refresh_rounded, size: 17),
+          label: const Text('Refresh'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _textDark,
+            side: const BorderSide(color: Color(0xFFD9DEE7)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
         ),
       ],
     );

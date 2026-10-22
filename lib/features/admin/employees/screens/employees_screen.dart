@@ -4,7 +4,11 @@ import '../../../../data/models/employee.dart';
 import '../../../../data/services/employee_service.dart';
 
 class EmployeesScreen extends StatefulWidget {
-  const EmployeesScreen({super.key});
+  /// True when shown inside the admin dashboard (the sidebar stays visible).
+  /// The dashboard already provides the Scaffold and AppBar.
+  final bool embedded;
+
+  const EmployeesScreen({super.key, this.embedded = false});
 
   @override
   State<EmployeesScreen> createState() => _EmployeesScreenState();
@@ -407,17 +411,29 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The actual body content
+    final body = SafeArea(
+      child: _buildBody(),
+    );
+
+    // Embedded: return only the body so the dashboard shell (sidebar + AppBar) stays
+    if (widget.embedded) {
+      return Container(
+        color: _pageBg,
+        child: body,
+      );
+    }
+
+    // Standalone: full screen with its own Scaffold and AppBar
     return Scaffold(
       backgroundColor: _pageBg,
       appBar: _buildAppBar(),
-      body: SafeArea(
-        child: _buildBody(),
-      ),
+      body: body,
     );
   }
 
   // ==========================================================
-  // APP BAR
+  // APP BAR (Only used when standalone)
   // ==========================================================
 
   PreferredSizeWidget _buildAppBar() {

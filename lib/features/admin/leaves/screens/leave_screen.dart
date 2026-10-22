@@ -6,7 +6,11 @@ import '../widgets/leave_card.dart';
 import 'leave_details_screen.dart';
 
 class LeaveScreen extends StatefulWidget {
-  const LeaveScreen({super.key});
+  /// True when shown inside the admin dashboard (the sidebar stays visible).
+  /// The dashboard already provides the Scaffold and AppBar.
+  final bool embedded;
+
+  const LeaveScreen({super.key, this.embedded = false});
 
   @override
   State<LeaveScreen> createState() => _LeaveScreenState();
@@ -28,6 +32,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
   static const Color textLight = Color(0xFF8A93A1);
   static const Color border = Color(0xFFE1E5EA);
   static const Color danger = Color(0xFFD64545);
+  static const Color pageBg = Color(0xFFF7F8FA);
 
   @override
   void initState() {
@@ -42,9 +47,6 @@ class _LeaveScreenState extends State<LeaveScreen> {
     });
 
     try {
-      // Leaves must always load; employee names are a display
-      // enhancement only, so a failure there doesn't block the
-      // main list (falls back to employee code via the model).
       final leavesFuture = _service.getLeaves();
       final namesFuture = _service.getEmployeeNames().catchError(
             (_) => <String, String>{},
@@ -211,10 +213,28 @@ class _LeaveScreenState extends State<LeaveScreen> {
     }
   }
 
+  // ==========================================================
+  // BUILD
+  // ==========================================================
+
   @override
   Widget build(BuildContext context) {
+    // The core body content
+    final body = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      child: _buildBody(),
+    );
+
+    // Inside the admin dashboard: body only, the sidebar stays visible.
+    if (widget.embedded) {
+      return Container(color: pageBg, child: body);
+    }
+
+    // Standalone: own Scaffold and AppBar.
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: pageBg,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
@@ -238,12 +258,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 280),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        child: _buildBody(),
-      ),
+      body: body,
     );
   }
 
@@ -389,9 +404,6 @@ class _LeaveScreenState extends State<LeaveScreen> {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
 
-        // Web / wide : all 5 in one row
-        // Tablet     : 3 per row
-        // Phone      : 2 per row
         final int columns = width >= 900 ? 5 : (width >= 600 ? 3 : 2);
         final bool compact = width < 600;
         final double spacing = compact ? 10 : 14;
@@ -419,6 +431,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
       },
     );
   }
+
   Widget _buildSearchAndFilter() {
     return Container(
       padding: const EdgeInsets.all(14),

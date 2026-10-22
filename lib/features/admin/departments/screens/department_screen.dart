@@ -12,35 +12,14 @@ import '../widgets/department_card.dart';
 import '../widgets/edit_department_dialog.dart';
 import '../widgets/move_employees_dialog.dart';
 
-// ============================================================================
-// DEPARTMENT MANAGEMENT SCREEN
-//
-// Department API:
-//   GET /departments
-//
-// Employee API:
-//   GET /employees?status=active
-//
-// IMPORTANT:
-// Employees are NOT loaded from:
-//
-//   /departments/:id/employees
-//
-// Instead, employees come from the existing Employee API.
-//
-// Example:
-//
-// Employee:
-//   department: "Accounts"
-//
-// Department:
-//   name: "Accounts"
-//
-// Therefore the employee is displayed inside Accounts.
-// ============================================================================
-
 class DepartmentScreen extends StatefulWidget {
-  const DepartmentScreen({super.key});
+  /// True when shown inside the admin dashboard (the sidebar stays visible).
+  final bool embedded;
+
+  const DepartmentScreen({
+    super.key,
+    this.embedded = false,
+  });
 
   @override
   State<DepartmentScreen> createState() => _DepartmentScreenState();
@@ -239,24 +218,6 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
 
   // ==========================================================================
   // GET STAFF FOR DEPARTMENT
-  //
-  // THIS IS THE IMPORTANT PART.
-  //
-  // Employee API:
-  //
-  // {
-  //   "employee": {
-  //     "department": "Accounts"
-  //   }
-  // }
-  //
-  // Department API:
-  //
-  // {
-  //   "name": "Accounts"
-  // }
-  //
-  // We compare these two values.
   // ==========================================================================
 
   List<Employee> _staffFor(
@@ -495,10 +456,6 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
 
   // ==========================================================================
   // VIEW / HIDE STAFF
-  //
-  // NO API CALL HERE.
-  //
-  // Employees were already loaded from Employee API in _loadAll().
   // ==========================================================================
 
   void _toggleStaff(
@@ -703,6 +660,45 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
   Widget build(BuildContext context) {
     final mobile = _isMobile;
 
+    // Embedded: Return only the body so the dashboard shell stays visible
+    if (widget.embedded) {
+      return Container(
+        color: _pageBg,
+        child: SafeArea(
+          child: _isLoading
+              ? const Center(
+            child: CircularProgressIndicator(
+              color: _primary,
+            ),
+          )
+              : _errorMessage != null
+              ? _buildErrorState()
+              : RefreshIndicator(
+            color: _primary,
+            onRefresh: _loadAll,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                mobile ? 14 : 24,
+                mobile ? 16 : 22,
+                mobile ? 14 : 24,
+                30,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildPageHeader(mobile),
+                  SizedBox(height: mobile ? 18 : 24),
+                  _buildDepartmentsGrid(mobile),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Standalone: Full screen with its own Scaffold and top bar
     return Scaffold(
       backgroundColor: _pageBg,
       body: SafeArea(
@@ -713,8 +709,7 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
             Expanded(
               child: _isLoading
                   ? const Center(
-                child:
-                CircularProgressIndicator(
+                child: CircularProgressIndicator(
                   color: _primary,
                 ),
               )
@@ -723,31 +718,20 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
                   : RefreshIndicator(
                 color: _primary,
                 onRefresh: _loadAll,
-                child:
-                SingleChildScrollView(
-                  physics:
-                  const AlwaysScrollableScrollPhysics(),
-                  padding:
-                  EdgeInsets.fromLTRB(
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
                     mobile ? 14 : 24,
                     mobile ? 16 : 22,
                     mobile ? 14 : 24,
                     30,
                   ),
                   child: Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildPageHeader(
-                        mobile,
-                      ),
-                      SizedBox(
-                        height:
-                        mobile ? 18 : 24,
-                      ),
-                      _buildDepartmentsGrid(
-                        mobile,
-                      ),
+                      _buildPageHeader(mobile),
+                      SizedBox(height: mobile ? 18 : 24),
+                      _buildDepartmentsGrid(mobile),
                     ],
                   ),
                 ),

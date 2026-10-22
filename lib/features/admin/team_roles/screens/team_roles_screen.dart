@@ -8,7 +8,13 @@ import '../widgets/role_permissions_dialog.dart';
 import '../widgets/team_members_table.dart';
 
 class TeamRolesScreen extends StatefulWidget {
-  const TeamRolesScreen({super.key});
+  /// True when shown inside the admin dashboard (the sidebar stays visible).
+  final bool embedded;
+
+  const TeamRolesScreen({
+    super.key,
+    this.embedded = false,
+  });
 
   @override
   State<TeamRolesScreen> createState() => _TeamRolesScreenState();
@@ -220,6 +226,18 @@ class _TeamRolesScreenState extends State<TeamRolesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The core body content
+    final bodyContent = SafeArea(child: _buildContent());
+
+    // Embedded: return only the body so the dashboard shell stays visible
+    if (widget.embedded) {
+      return Container(
+        color: _pageBg,
+        child: bodyContent,
+      );
+    }
+
+    // Standalone: full screen with its own Scaffold and AppBar
     return Scaffold(
       backgroundColor: _pageBg,
       appBar: AppBar(
@@ -249,7 +267,7 @@ class _TeamRolesScreenState extends State<TeamRolesScreen> {
           const SizedBox(width: 6),
         ],
       ),
-      body: SafeArea(child: _buildContent()),
+      body: bodyContent,
     );
   }
 

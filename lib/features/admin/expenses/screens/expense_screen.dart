@@ -6,7 +6,13 @@ import '../widgets/expense_card.dart';
 import 'expense_details_screen.dart';
 
 class ExpenseScreen extends StatefulWidget {
-  const ExpenseScreen({super.key});
+  /// True when shown inside the admin dashboard (the sidebar stays visible).
+  final bool embedded;
+
+  const ExpenseScreen({
+    super.key,
+    this.embedded = false,
+  });
 
   @override
   State<ExpenseScreen> createState() => _ExpenseScreenState();
@@ -28,6 +34,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   static const Color textLight = Color(0xFF8A93A1);
   static const Color border = Color(0xFFE1E5EA);
   static const Color danger = Color(0xFFD64545);
+  static const Color pageBg = Color(0xFFF7F8FA);
 
   @override
   void initState() {
@@ -199,8 +206,25 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The core body content
+    final bodyContent = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      child: _buildBody(),
+    );
+
+    // Embedded: return only the body so the dashboard shell stays visible
+    if (widget.embedded) {
+      return Container(
+        color: pageBg,
+        child: bodyContent,
+      );
+    }
+
+    // Standalone: full screen with its own Scaffold and AppBar
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: pageBg,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
@@ -218,12 +242,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 280),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        child: _buildBody(),
-      ),
+      body: bodyContent,
     );
   }
 
@@ -359,9 +378,6 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
 
-        // Web / wide : all 5 in one row
-        // Tablet     : 3 per row
-        // Phone      : 2 per row
         final int columns = width >= 900 ? 5 : (width >= 600 ? 3 : 2);
         final bool compact = width < 600;
         final double spacing = compact ? 10 : 14;
@@ -389,6 +405,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       },
     );
   }
+
   Widget _buildSearchAndFilter() {
     return Container(
       padding: const EdgeInsets.all(14),
