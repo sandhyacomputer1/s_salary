@@ -14,6 +14,7 @@ import '../../employees/screens/employees_screen.dart';
 import '../../expenses/screens/expense_screen.dart';
 import '../../field_tracking/screens/field_tracking_screen.dart';
 import '../../payroll/screens/payroll_screen.dart';
+import '../../reports/widgets/reports_main_screen.dart';
 import '../../settings/screens/settings_screen.dart';
 import '../../shift_roster/screens/shift_roster_screen.dart';
 import '../../employees/screens/add_employee_screen.dart';
@@ -251,6 +252,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (_selectedScreenIndex == 11) titleText = 'Branches & Locations';
     if (_selectedScreenIndex == 12) titleText = 'Team & Roles';
     if (_selectedScreenIndex == 13) titleText = 'Settings';
+    if (_selectedScreenIndex == 14) titleText = 'Reports & Matrix'; // <-- ADDED
 
     return AppBar(
       elevation: 0,
@@ -285,6 +287,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           onPressed: () => _onNavigationSelected(8),
           icon: const Icon(Icons.notifications_none_rounded),
         ),
+        // ADDED BELOW:
+
         const SizedBox(width: 10),
       ],
     );
@@ -304,6 +308,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (_selectedScreenIndex == 11) return const BranchesScreen(embedded: true);
     if (_selectedScreenIndex == 12) return const TeamRolesScreen(embedded: true);
     if (_selectedScreenIndex == 13) return const SettingsScreen(embedded: true); // Add this
+    if (_selectedScreenIndex == 14) return const ReportsMainScreen();
 
     return _buildOverviewDashboard();
   }
@@ -367,6 +372,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             'Notifications', () => _onNavigationSelected(8),
             selectedIndex: 8
         ),
+        _SideItem(Icons.table_chart_outlined,
+            'Reports & Matrix', () => _onNavigationSelected(14),
+            selectedIndex: 14
+        ),
+
+
 
       ]),
       _SideSection('FINANCE', [

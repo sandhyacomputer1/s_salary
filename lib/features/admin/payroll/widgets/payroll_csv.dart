@@ -1,73 +1,73 @@
+// lib/features/admin/payroll/widgets/payroll_csv.dart
+
+import 'package:excel_plus/excel_plus.dart';
 import '../models/payroll_slip_model.dart';
 import 'payroll_format.dart';
 
-/// Builds the "Export CSV" text from the payroll rows on screen.
 class PayrollCsv {
   PayrollCsv._();
 
-  static const List<String> _header = [
-    'Employee',
-    'Code',
-    'Month',
-    'Year',
-    'Days in month',
-    'Present days',
-    'Paid leave days',
-    'Late count',
-    'Base salary',
-    'Late penalty',
-    'PT deduction',
-    'PF deduction',
-    'Rule deductions',
-    'Gross salary',
-    'Net payable',
-    'Status',
-    'Email status',
-  ];
+  static List<int> buildExcel(List<PayrollSlip> slips) {
+    final excel = Excel.createExcel();
+    final sheet = excel['Payroll'];
 
-  static String build(List<PayrollSlip> slips) {
-    final lines = <String>[_header.map(_cell).join(',')];
+    // 1. Define the headers
+    final headers = [
+      'Employee Code', 'Employee Name', 'Department', 'Designation', 'Month/Year',
+      'Month Days', 'Present Days', 'Absent Days', 'Late Count', 'Base Salary (INR)',
+      'Allowances (INR)', 'Reimbursements (INR)', 'Gross Salary (INR)',
+      'Absence Cut (INR)', 'Late Cut (INR)', 'PT Deduction (INR)',
+      'Total Deductions (INR)', 'Net Salary (INR)',
+    ];
 
-    for (final s in slips) {
-      lines.add(
-        [
-          s.employeeName,
-          s.employeeCode,
-          PayrollFormat.monthName(s.month),
-          s.year,
-          s.daysInMonth,
-          s.presentDays,
-          s.paidLeaveDays,
-          s.lateDays,
-          s.baseSalary.toStringAsFixed(2),
-          s.lateDeduction.toStringAsFixed(2),
-          s.ptDeduction.toStringAsFixed(2),
-          s.pfDeduction.toStringAsFixed(2),
-          s.ruleDeductionsTotal.toStringAsFixed(2),
-          s.grossSalary.toStringAsFixed(2),
-          s.netSalary.toStringAsFixed(2),
-          s.status,
-          s.emailStatus,
-        ].map(_cell).join(','),
-      );
+    // Add headers to row 0
+    for (var col = 0; col < headers.length; col++) {
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0)).value = TextCellValue(headers[col]);
     }
 
-    return lines.join('\n');
-  }
+    // 2. Add the data
+    for (var row = 0; row < slips.length; row++) {
+      final s = slips[row];
+      final totalDeductions = s.grossSalary - s.netSalary;
+      final rowData = [
+        s.employeeCode,
+        s.employeeName,
+        s.department,
+        s.designation,
+        '${PayrollFormat.monthName(s.month)} ${s.year}',
+        s.daysInMonth.toString(),
+        s.presentDays.toString(),
+        s.absentDays.toString(),
+        s.lateDays.toString(),
+        s.baseSalary.toStringAsFixed(2),
+        s.allowancesTotal.toStringAsFixed(2),
+        s.expenseReimbursement.toStringAsFixed(2),
+        s.grossSalary.toStringAsFixed(2),
+        s.absenceDeduction.toStringAsFixed(2),
+        s.lateDeduction.toStringAsFixed(2),
+        s.ptDeduction.toStringAsFixed(2),
+        totalDeductions.toStringAsFixed(2),
+        s.netSalary.toStringAsFixed(2),
+      ];
 
-  /// Quotes values that need it, and neutralises text that a spreadsheet
-  /// would run as a formula (a leading = + - @ in a text cell).
-  static String _cell(Object? value) {
-    var text = '${value ?? ''}';
-
-    if (value is String && RegExp(r'^[=+\-@]').hasMatch(text)) {
-      text = "'$text";
+      for (var col = 0; col < rowData.length; col++) {
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row + 1)).value = TextCellValue(rowData[col]);
+      }
     }
 
-    if (text.contains(',') || text.contains('"') || text.contains('\n')) {
-      text = '"${text.replaceAll('"', '""')}"';
+    // 3. Auto-fit column widths
+    for (var col = 0; col < headers.length; col++) {
+      sheet.setColumnWidth(col, 20.0);
     }
 
-    return text;
+    // 4. Delete the default empty "Sheet1"
+    if (excel.sheets.containsKey('Sheet1')) {
+      excel.delete('Sheet1');
+    }
+
+    // THE MAGIC FIX: Get raw bytes without triggering internal save
+    final fileBytes = excel.encode();
+    if (fileBytes == null) throw Exception("Could not generate Excel file");
+    return fileBytes;
   }
 }

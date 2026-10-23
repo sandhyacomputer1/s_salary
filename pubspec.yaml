@@ -43,6 +43,7 @@ dependencies:
   printing: ^5.15.1
   image_picker: ^1.0.4
   camera: ^0.12.1
+  excel_plus: ^2.29.0
 
 dev_dependencies:
   flutter_test:

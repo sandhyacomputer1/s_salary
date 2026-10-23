@@ -17,7 +17,11 @@ import '../widgets/payroll_format.dart';
 import '../widgets/payroll_reports_tabs.dart';
 import '../widgets/payslip_dialog.dart';
 import '../widgets/set_salary_dialog.dart';
-
+import 'package:flutter/foundation.dart';
+import 'dart:io' show File;
+import 'package:path_provider/path_provider.dart';
+import '../../reports/utils/csv_export_web_stub.dart'
+if (dart.library.html) '../../reports/utils/csv_export_web_real.dart' as platform;
 class PayrollScreen extends StatefulWidget {
   /// True when shown inside the admin dashboard (the sidebar stays visible).
   final bool embedded;
@@ -525,11 +529,29 @@ class _PayrollScreenState extends State<PayrollScreen>
     final slips = _displaySlips;
     if (slips == null || slips.isEmpty) return;
 
-    await Clipboard.setData(ClipboardData(text: PayrollCsv.build(slips)));
-    if (!mounted) return;
+    final filename = 'Payroll_${PayrollFormat.monthName(_month)}_$_year.xlsx';
 
-    _toast('CSV for $_periodLabel copied to the clipboard.');
+    try {
+      // Remove the filename argument from here
+      final bytes = PayrollCsv.buildExcel(slips);
+
+      if (kIsWeb) {
+        final success = await platform.downloadBytes(filename, bytes);
+        if (!mounted) return;
+        _toast(success ? 'Excel file downloaded.' : 'Export failed.');
+      } else {
+        final dir = await getApplicationDocumentsDirectory();
+        final file = File('${dir.path}/$filename');
+        await file.writeAsBytes(bytes);
+        if (!mounted) return;
+        _toast('Excel file saved to: ${file.path}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _toast('Failed to export: $e', error: true);
+    }
   }
+
 
   Future<void> _refundPf(PfBalance balance) async {
     if (_busy) return;
