@@ -1,21 +1,30 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- REQUIRED for release APK (login / API calls). Debug builds add it
+         automatically, release builds do not. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Phones without a camera can still install the app -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera.front"
+        android:required="false" />
+
     <application
         android:label="s_salary"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false">
 
-        <!-- Fixed the typo here -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyCcABdxulsH8Ds7NKE-fVSynsNz8VZW7NM" />
-
-        <meta-data
-            android:name="io.flutter.embedding.android.EnableImpeller"
-            android:value="false" />
 
         <activity
             android:name=".MainActivity"
@@ -48,6 +57,10 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
+        </intent>
+        <!-- lets image_picker find the camera app (Android 11+) -->
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>
     </queries>
 

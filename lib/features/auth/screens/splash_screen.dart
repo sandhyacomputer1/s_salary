@@ -13,12 +13,13 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   // ============================
-  // THEME COLORS (matches login screen / web dashboard)
+  // THEME COLORS (matches login screen / web)
   // ============================
-  static const Color kOrange = Color(0xFFFF6B2C);
-  static const Color kOrangeDark = Color(0xFFE85A1A);
-  static const Color kBlack = Color(0xFF1C1C1E);
-  static const Color kGrey = Color(0xFF8E8E93);
+  static const Color kOrange = Color(0xFFE8622C);
+  static const Color kOrangeLight = Color(0xFFFF7A3D);
+  static const Color kDark = Color(0xFF14100E);
+
+  static const String kLogoAsset = 'lib/assets/images/imglo.jpeg';
 
   // Entrance animation (logo + title pop/fade/slide in)
   late final AnimationController _entranceController;
@@ -78,7 +79,7 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 1600),
     )..repeat(reverse: true);
 
-    _pulseScale = Tween<double>(begin: 0.96, end: 1.08).animate(
+    _pulseScale = Tween<double>(begin: 0.96, end: 1.06).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
@@ -92,13 +93,37 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
+  // ============================================================
+  // SESSION CHECK (unchanged)
+  // ============================================================
+
   Future<void> _checkSession() async {
     // Small delay so splash screen is visible
     await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
 
-    final accessToken = await SecureStorage.getAccessToken();
+    String? accessToken;
+    String? role;
+
+    try {
+      // On some Android phones the secure storage can fail or hang
+      // (old/corrupt saved data). Never let that block the app.
+      accessToken = await SecureStorage.getAccessToken()
+          .timeout(const Duration(seconds: 6));
+
+      if (accessToken != null && accessToken.isNotEmpty) {
+        role = await SecureStorage.getUserRole()
+            .timeout(const Duration(seconds: 6));
+      }
+    } catch (e) {
+      debugPrint('SPLASH SESSION ERROR: $e');
+      accessToken = null;
+
+      try {
+        await SecureStorage.clearSession();
+      } catch (_) {}
+    }
 
     if (!mounted) return;
 
@@ -112,10 +137,6 @@ class _SplashScreenState extends State<SplashScreen>
     }
 
     // User is already logged in
-    final role = await SecureStorage.getUserRole();
-
-    if (!mounted) return;
-
     if (_isEmployee(role)) {
       Navigator.pushReplacementNamed(
         context,
@@ -133,110 +154,240 @@ class _SplashScreenState extends State<SplashScreen>
     return role?.toLowerCase() == 'employee';
   }
 
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // ============================
-            // LOGO — pop-in then continuous gentle pulse
-            // ============================
-            FadeTransition(
-              opacity: _logoFade,
-              child: ScaleTransition(
-                scale: _logoScale,
-                child: AnimatedBuilder(
-                  animation: _pulseScale,
-                  builder: (context, child) {
-                    return Transform.scale(
-                      scale: _pulseScale.value,
-                      child: child,
-                    );
-                  },
-                  child: Container(
-                    height: 84,
-                    width: 84,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(22),
-                      gradient: const LinearGradient(
-                        colors: [kOrange, kOrangeDark],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+      backgroundColor: kDark,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // orange glows
+          Positioned(
+            left: -140,
+            top: -100,
+            child: _Glow(size: 480, color: kOrange.withValues(alpha: 0.26)),
+          ),
+          Positioned(
+            right: -200,
+            bottom: -200,
+            child: _Glow(size: 560, color: kOrange.withValues(alpha: 0.14)),
+          ),
+
+          // subtle grid
+          const Positioned.fill(child: CustomPaint(painter: _GridPainter())),
+
+          // centre content
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // LOGO — pop-in then continuous gentle pulse
+                FadeTransition(
+                  opacity: _logoFade,
+                  child: ScaleTransition(
+                    scale: _logoScale,
+                    child: AnimatedBuilder(
+                      animation: _pulseScale,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: _pulseScale.value,
+                          child: child,
+                        );
+                      },
+                      child: const _LogoMark(size: 92),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 26),
+
+                // TITLE — fade + slide up
+                FadeTransition(
+                  opacity: _titleFade,
+                  child: SlideTransition(
+                    position: _titleSlide,
+                    child: const Text(
+                      'Sandhya Salary',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: -0.3,
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: kOrange.withOpacity(0.35),
-                          blurRadius: 26,
-                          offset: const Offset(0, 12),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                FadeTransition(
+                  opacity: _titleFade,
+                  child: RichText(
+                    text: const TextSpan(
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: 'Payroll, ',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                        TextSpan(
+                          text: 'simplified.',
+                          style: TextStyle(color: kOrangeLight),
                         ),
                       ],
                     ),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.bolt_rounded,
-                      color: Colors.white,
-                      size: 46,
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+
+                // LOADER — orange, fades in last
+                FadeTransition(
+                  opacity: _loaderFade,
+                  child: const SizedBox(
+                    height: 26,
+                    width: 26,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.6,
+                      valueColor: AlwaysStoppedAnimation(kOrange),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
+          ),
 
-            const SizedBox(height: 24),
-
-            // ============================
-            // TITLE — fade + slide up
-            // ============================
-            FadeTransition(
-              opacity: _titleFade,
-              child: SlideTransition(
-                position: _titleSlide,
-                child: const Text(
-                  'S Salary',
+          // footer
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 28,
+            child: SafeArea(
+              top: false,
+              child: FadeTransition(
+                opacity: _loaderFade,
+                child: Text(
+                  'Sandhya Softtech',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                    color: kBlack,
-                    letterSpacing: 0.2,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.4,
+                    color: Colors.white.withValues(alpha: 0.45),
                   ),
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-            const SizedBox(height: 6),
+// ================================================================
+// SMALL WIDGETS
+// ================================================================
 
-            FadeTransition(
-              opacity: _titleFade,
-              child: Text(
-                'Payroll made simple',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: kGrey,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+class _Glow extends StatelessWidget {
+  final double size;
+  final Color color;
+  const _Glow({required this.size, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [color, color.withValues(alpha: 0)],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GridPainter extends CustomPainter {
+  const _GridPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.035)
+      ..strokeWidth = 1;
+    const step = 44.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Shows the "S" mark from lib/assets/images/imglo.jpeg
+/// (same crop as the login screen).
+class _LogoMark extends StatelessWidget {
+  final double size;
+  const _LogoMark({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(size * 0.08),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(size * 0.26),
+        boxShadow: [
+          BoxShadow(
+            color: _SplashScreenState.kOrange.withValues(alpha: 0.35),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: ClipRect(
+          child: Align(
+            alignment: const Alignment(-0.2, -0.22),
+            widthFactor: 0.5,
+            heightFactor: 0.5,
+            child: Image.asset(
+              _SplashScreenState.kLogoAsset,
+              width: 1000,
+              height: 1000,
+              fit: BoxFit.cover,
+              errorBuilder: (_, error, __) {
+                debugPrint('LOGO ASSET ERROR: $error');
+                return const SizedBox(
+                  width: 1000,
+                  height: 1000,
+                  child: Icon(
+                    Icons.bolt_rounded,
+                    color: _SplashScreenState.kOrange,
+                    size: 500,
+                  ),
+                );
+              },
             ),
-
-            const SizedBox(height: 36),
-
-            // ============================
-            // LOADER — orange themed, fades in last
-            // ============================
-            FadeTransition(
-              opacity: _loaderFade,
-              child: const SizedBox(
-                height: 28,
-                width: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.8,
-                  valueColor: AlwaysStoppedAnimation(kOrange),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
