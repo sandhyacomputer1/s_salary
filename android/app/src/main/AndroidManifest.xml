@@ -19,7 +19,7 @@
     <application
         android:label="s_salary"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/launcher_icon"
         android:allowBackup="false">
 
         <meta-data

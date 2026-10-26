@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../models/attendance_summary_model.dart';
 import '../utils/attendance_theme.dart';
 
+/// Present / Late / Absent / Leaves / Holidays  (dot + label + count),
+/// same as the web page.
 class AttendanceStatChips extends StatelessWidget {
   final AttendanceSummaryModel summary;
 
@@ -13,34 +15,31 @@ class AttendanceStatChips extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chips = <_Chip>[
-      _Chip('Present', summary.present, AttendanceColors.present),
-      _Chip('Late', summary.late, AttendanceColors.late),
-      _Chip('Absent', summary.absent, AttendanceColors.absent),
-      _Chip('Leaves', summary.onLeave, AttendanceColors.leave),
-      _Chip('Holidays', summary.holiday + summary.weekOff,
-          AttendanceColors.holiday),
+      _Chip('Present', summary.present, AttendanceStatuses.present.solid),
+      _Chip('Late', summary.late, AttendanceStatuses.late.solid),
+      _Chip('Absent', summary.absent, AttendanceStatuses.absent.solid),
+      _Chip('Leaves', summary.onLeave, AttendanceStatuses.leave.solid),
+      _Chip('Holidays', summary.holiday, AttendanceStatuses.holiday.solid),
     ];
 
     return LayoutBuilder(
       builder: (context, c) {
         final width = c.maxWidth;
-        final perRow = width < 420
+        final perRow = width < 440
             ? 2
             : width < 720
             ? 3
             : 5;
         const spacing = 12.0;
-        final cellWidth = (width - spacing * (perRow - 1)) / perRow;
+        final cellWidth = ((width - spacing * (perRow - 1)) / perRow)
+            .floorToDouble();
 
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
           children: [
             for (final chip in chips)
-              SizedBox(
-                width: cellWidth,
-                child: _ChipCard(chip: chip),
-              ),
+              SizedBox(width: cellWidth, child: _ChipCard(chip: chip)),
           ],
         );
       },
@@ -51,8 +50,8 @@ class AttendanceStatChips extends StatelessWidget {
 class _Chip {
   final String label;
   final int value;
-  final Color dotColor;
-  const _Chip(this.label, this.value, this.dotColor);
+  final Color dot;
+  const _Chip(this.label, this.value, this.dot);
 }
 
 class _ChipCard extends StatelessWidget {
@@ -62,31 +61,40 @@ class _ChipCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AttendanceColors.surface,
+        color: AttendanceColors.surfaceAlt,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AttendanceColors.border),
       ),
       child: Row(
         children: [
           Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: chip.dotColor,
-              shape: BoxShape.circle,
-            ),
+            width: 9,
+            height: 9,
+            decoration: BoxDecoration(color: chip.dot, shape: BoxShape.circle),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               chip.label,
-              style: AttendanceText.chipLabel,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: AttendanceColors.textMedium,
+              ),
             ),
           ),
-          Text('${chip.value}', style: AttendanceText.chipValue),
+          Text(
+            '${chip.value}',
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: AttendanceColors.textDark,
+            ),
+          ),
         ],
       ),
     );

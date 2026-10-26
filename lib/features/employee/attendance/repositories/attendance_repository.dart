@@ -27,15 +27,25 @@ final attendanceEmployeeIdProvider = FutureProvider<String>((ref) async {
   return id;
 });
 
+/// Weekly-off weekdays of the employee's shift (1 = Mon ... 7 = Sun).
+final attendanceWeeklyOffsProvider = FutureProvider<Set<int>>((ref) {
+  return ref.watch(attendanceServiceProvider).fetchWeeklyOffs();
+});
+
 class AttendanceRepository {
   final AttendanceService _service;
   AttendanceRepository(this._service);
 
-  Future<List<AttendanceDayModel>> getMyHistory({
+  Future<List<AttendanceDayModel>> getHistory({
+    required String employeeId,
     required int month,
     required int year,
   }) {
-    return _service.fetchMyHistory(month: month, year: year);
+    return _service.fetchHistory(
+      employeeId: employeeId,
+      month: month,
+      year: year,
+    );
   }
 
   Future<AttendanceSummaryModel> getSummary({
@@ -55,11 +65,13 @@ final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
   return AttendanceRepository(ref.watch(attendanceServiceProvider));
 });
 
-/// Family provider keyed by (month, year) — one fetch per visible month.
+/// One fetch per visible (month, year).
 final attendanceHistoryProvider = FutureProvider.autoDispose
     .family<List<AttendanceDayModel>, ({int month, int year})>(
         (ref, key) async {
-      return ref.watch(attendanceRepositoryProvider).getMyHistory(
+      final employeeId = await ref.watch(attendanceEmployeeIdProvider.future);
+      return ref.watch(attendanceRepositoryProvider).getHistory(
+        employeeId: employeeId,
         month: key.month,
         year: key.year,
       );

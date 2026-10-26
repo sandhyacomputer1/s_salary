@@ -22,6 +22,8 @@ class ManualMarkDialog extends ConsumerStatefulWidget {
 }
 
 class _ManualMarkDialogState extends ConsumerState<ManualMarkDialog> {
+  static const double _mobileBreakpoint = 700;
+
   String? _employeeId;
   late DateTime _date;
   String _status = 'P';
@@ -64,7 +66,8 @@ class _ManualMarkDialogState extends ConsumerState<ManualMarkDialog> {
         if (_employeeId != null) {
           _selectedEmployee = list.firstWhere(
                 (e) => e.id == _employeeId,
-            orElse: () => list.isNotEmpty ? list.first : throw Exception('No employees'),
+            orElse: () =>
+            list.isNotEmpty ? list.first : throw Exception('No employees'),
           );
           // Ensure the dropdown actually selects it
           _employeeId = _selectedEmployee?.id;
@@ -114,20 +117,28 @@ class _ManualMarkDialogState extends ConsumerState<ManualMarkDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = MediaQuery.sizeOf(context).width < _mobileBreakpoint;
+
     return Dialog(
       backgroundColor: Colors.white,
+      // smaller side margin on phones = more room for the content
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: mobile ? 14 : 40,
+        vertical: 24,
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620, maxHeight: 800),
         child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: _buildBody(),
+          padding: EdgeInsets.all(mobile ? 18 : 24),
+          // scrolls when the keyboard is open / the phone is short
+          child: SingleChildScrollView(child: _buildBody(mobile)),
         ),
       ),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(bool mobile) {
     if (_loadingEmployees) {
       return const SizedBox(
           height: 200, child: Center(child: CircularProgressIndicator()));
@@ -137,7 +148,8 @@ class _ManualMarkDialogState extends ConsumerState<ManualMarkDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text('Could not load employees.\n$_employeesError',
-              textAlign: TextAlign.center, style: NotificationText.emptySubtitle),
+              textAlign: TextAlign.center,
+              style: NotificationText.emptySubtitle),
           const SizedBox(height: 12),
           TextButton(
             onPressed: () {
@@ -164,7 +176,11 @@ class _ManualMarkDialogState extends ConsumerState<ManualMarkDialog> {
           Expanded(
             child: Text(
               'Mark Manual Attendance — ${_fmtDate(_date)}',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF18212F)),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF18212F),
+              ),
             ),
           ),
           IconButton(
@@ -174,20 +190,32 @@ class _ManualMarkDialogState extends ConsumerState<ManualMarkDialog> {
         const SizedBox(height: 16),
 
         // Employee Dropdown Selection
+        // isExpanded + ellipsis = the long "Name (CODE)" can no longer
+        // push the arrow outside the box (was "right overflowed by 5.9").
         DropdownButtonFormField<String>(
           value: _employeeId,
+          isExpanded: true,
           icon: const Icon(Icons.keyboard_arrow_down, size: 20),
           decoration: InputDecoration(
             labelText: 'Employee',
             labelStyle: const TextStyle(fontSize: 13, color: Color(0xFF8A93A1)),
             floatingLabelBehavior: FloatingLabelBehavior.always,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            ),
+            contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
           ),
           items: employees
               .map((e) => DropdownMenuItem(
             value: e.id,
-            child: Text('${e.name} (${e.employeeCode})', style: const TextStyle(fontSize: 14)),
+            child: Text(
+              '${e.name} (${e.employeeCode})',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14),
+            ),
           ))
               .toList(),
           onChanged: (v) {
@@ -214,18 +242,49 @@ class _ManualMarkDialogState extends ConsumerState<ManualMarkDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_selectedEmployee!.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF18212F))),
+                      Text(
+                        _selectedEmployee!.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF18212F),
+                        ),
+                      ),
                       const SizedBox(height: 4),
-                      Text('Code: ${_selectedEmployee!.employeeCode}', style: const TextStyle(fontSize: 12, color: Color(0xFF8A93A1))),
+                      Text(
+                        'Code: ${_selectedEmployee!.employeeCode}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF8A93A1),
+                        ),
+                      ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 10),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Text('TARGET DATE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: Color(0xFF8A93A1))),
+                    const Text(
+                      'TARGET DATE',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                        color: Color(0xFF8A93A1),
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text(_fmtDate(_date), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFFE96832))),
+                    Text(
+                      _fmtDate(_date),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFE96832),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -234,13 +293,20 @@ class _ManualMarkDialogState extends ConsumerState<ManualMarkDialog> {
         const SizedBox(height: 20),
 
         // Status Options Label
-        const Text('Select Attendance Status:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF18212F))),
+        const Text(
+          'Select Attendance Status:',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF18212F),
+          ),
+        ),
         const SizedBox(height: 12),
 
         // Status Options Grid (2x2)
         LayoutBuilder(
           builder: (context, constraints) {
-            final itemWidth = (constraints.maxWidth - 12) / 2;
+            final itemWidth = ((constraints.maxWidth - 12) / 2).floorToDouble();
             return Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -272,9 +338,22 @@ class _ManualMarkDialogState extends ConsumerState<ManualMarkDialog> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(s.$2, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFF18212F))),
+                              Text(
+                                s.$2,
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF18212F),
+                                ),
+                              ),
                               const SizedBox(height: 4),
-                              Text(s.$3, style: const TextStyle(fontSize: 11, color: Color(0xFF8A93A1))),
+                              Text(
+                                s.$3,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF8A93A1),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -289,48 +368,106 @@ class _ManualMarkDialogState extends ConsumerState<ManualMarkDialog> {
         const SizedBox(height: 24),
 
         // Note Field
-        const Text('Admin Note / Reason (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF18212F))),
+        const Text(
+          'Admin Note / Reason (Optional)',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF18212F),
+          ),
+        ),
         const SizedBox(height: 8),
         TextField(
           controller: _note,
           decoration: InputDecoration(
             hintText: 'e.g. Marked present as per approval by HR',
             hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF8A93A1)),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            ),
+            contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
         ),
         const SizedBox(height: 28),
 
         // Action Buttons
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            OutlinedButton(
-              onPressed: _saving ? null : () => Navigator.pop(context),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF18212F),
-                side: const BorderSide(color: Color(0xFFE5E7EB)),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Text('Cancel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            ),
-            const SizedBox(width: 12),
-            FilledButton(
-              onPressed: _saving ? null : _save,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFE96832),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: _saving
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Save Attendance Status', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            ),
-          ],
+        _buildButtons(mobile),
+      ],
+    );
+  }
+
+  Widget _buildButtons(bool mobile) {
+    final cancel = OutlinedButton(
+      onPressed: _saving ? null : () => Navigator.pop(context),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF18212F),
+        side: const BorderSide(color: Color(0xFFE5E7EB)),
+        padding: EdgeInsets.symmetric(
+          horizontal: mobile ? 12 : 20,
+          vertical: 14,
         ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: const Text(
+        'Cancel',
+        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      ),
+    );
+
+    final save = FilledButton(
+      onPressed: _saving ? null : _save,
+      style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFFE96832),
+        padding: EdgeInsets.symmetric(
+          horizontal: mobile ? 12 : 20,
+          vertical: 14,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: _saving
+          ? const SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: Colors.white,
+        ),
+      )
+      // shrinks a little instead of overflowing on narrow phones
+          : const FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          'Save Attendance Status',
+          maxLines: 1,
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+
+    // Phone: both buttons share the full width (Cancel small, Save big).
+    if (mobile) {
+      return Row(
+        children: [
+          Expanded(flex: 2, child: cancel),
+          const SizedBox(width: 12),
+          Expanded(flex: 5, child: save),
+        ],
+      );
+    }
+
+    // Web: right aligned, same as before.
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        cancel,
+        const SizedBox(width: 12),
+        save,
       ],
     );
   }

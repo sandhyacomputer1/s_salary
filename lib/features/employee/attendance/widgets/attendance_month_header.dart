@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../utils/attendance_theme.dart';
 
+/// [<]  [ October v | 2026 v ]  [>]   (same as the web page)
 class AttendanceMonthHeader extends StatelessWidget {
   final int month;
   final int year;
   final VoidCallback onPrev;
   final VoidCallback onNext;
+  final ValueChanged<int> onMonthChanged;
+  final ValueChanged<int> onYearChanged;
 
   const AttendanceMonthHeader({
     super.key,
@@ -16,66 +19,159 @@ class AttendanceMonthHeader extends StatelessWidget {
     required this.year,
     required this.onPrev,
     required this.onNext,
+    required this.onMonthChanged,
+    required this.onYearChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AttendanceColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AttendanceColors.border),
-      ),
-      child: Row(
-        children: [
-          _ArrowButton(
-            icon: Icons.chevron_left_rounded,
-            onTap: onPrev,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
+    final nowYear = DateTime.now().year;
+    final years = [for (var y = nowYear - 4; y <= nowYear + 1; y++) y];
+
+    return Row(
+      children: [
+        _ArrowButton(
+          icon: Icons.chevron_left_rounded,
+          tooltip: 'Previous month',
+          onTap: onPrev,
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: AttendanceColors.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AttendanceColors.border),
+            ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  AttendanceFormatters.monthYear(month, year),
-                  style: AttendanceText.monthLabel,
+                // month
+                PopupMenuButton<int>(
+                  tooltip: 'Select month',
+                  position: PopupMenuPosition.under,
+                  onSelected: onMonthChanged,
+                  itemBuilder: (_) => [
+                    for (var m = 1; m <= 12; m++)
+                      PopupMenuItem<int>(
+                        value: m,
+                        child: Text(
+                          AttendanceFormatters.monthNames[m - 1],
+                          style: TextStyle(
+                            fontWeight:
+                            m == month ? FontWeight.w800 : FontWeight.w500,
+                            color: m == month
+                                ? AttendanceColors.primary
+                                : AttendanceColors.textDark,
+                          ),
+                        ),
+                      ),
+                  ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        AttendanceFormatters.monthNames[month - 1],
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AttendanceColors.textDark,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 20,
+                        color: AttendanceColors.textDark,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                // year
+                PopupMenuButton<int>(
+                  tooltip: 'Select year',
+                  position: PopupMenuPosition.under,
+                  onSelected: onYearChanged,
+                  itemBuilder: (_) => [
+                    for (final y in years)
+                      PopupMenuItem<int>(
+                        value: y,
+                        child: Text(
+                          '$y',
+                          style: TextStyle(
+                            fontWeight:
+                            y == year ? FontWeight.w800 : FontWeight.w500,
+                            color: y == year
+                                ? AttendanceColors.primary
+                                : AttendanceColors.textDark,
+                          ),
+                        ),
+                      ),
+                  ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$year',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AttendanceColors.primary,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 20,
+                        color: AttendanceColors.primary,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          _ArrowButton(
-            icon: Icons.chevron_right_rounded,
-            onTap: onNext,
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 10),
+        _ArrowButton(
+          icon: Icons.chevron_right_rounded,
+          tooltip: 'Next month',
+          onTap: onNext,
+        ),
+      ],
     );
   }
 }
 
 class _ArrowButton extends StatelessWidget {
   final IconData icon;
+  final String tooltip;
   final VoidCallback onTap;
-  const _ArrowButton({required this.icon, required this.onTap});
+
+  const _ArrowButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        width: 36,
-        height: 36,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AttendanceColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AttendanceColors.border),
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AttendanceColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AttendanceColors.border),
+          ),
+          child: Icon(icon, size: 20, color: AttendanceColors.textDark),
         ),
-        child: Icon(icon, size: 18, color: AttendanceColors.textDark),
       ),
     );
   }

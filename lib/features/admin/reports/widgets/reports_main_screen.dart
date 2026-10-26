@@ -14,32 +14,65 @@ class ReportsMainScreen extends ConsumerStatefulWidget {
 }
 
 class _ReportsMainScreenState extends ConsumerState<ReportsMainScreen> {
+  static const double _mobileBreakpoint = 700;
+
   int _tab = 0;
 
   @override
   Widget build(BuildContext context) {
     final dailyCount = ref.watch(dailyReportsProvider).valueOrNull?.length ?? 0;
+    final mobile = MediaQuery.sizeOf(context).width < _mobileBreakpoint;
+
+    // Phone: two equal tabs that both fit on the screen.
+    // Web: the same tabs as before (sized by their text).
+    final matrixTab = _TabBtn(
+      label: mobile ? 'Attendance Matrix' : 'Monthly Attendance Matrix',
+      selected: _tab == 0,
+      expand: mobile,
+      onTap: () => setState(() => _tab = 0),
+    );
+
+    final dailyTab = _TabBtn(
+      label: mobile
+          ? 'Daily Reports ($dailyCount)'
+          : 'Employee Daily Work Reports ($dailyCount)',
+      selected: _tab == 1,
+      expand: mobile,
+      onTap: () => setState(() => _tab = 1),
+    );
 
     return Container(
       color: NotificationColors.background,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(22),
+        padding: EdgeInsets.all(mobile ? 14 : 22),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: NotificationColors.border)),
-              child: Row(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: NotificationColors.border),
+              ),
+              child: mobile
+                  ? Row(
+                children: [
+                  Expanded(child: matrixTab),
+                  const SizedBox(width: 4),
+                  Expanded(child: dailyTab),
+                ],
+              )
+                  : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _TabBtn(label: 'Monthly Attendance Matrix', selected: _tab == 0, onTap: () => setState(() => _tab = 0)),
+                  matrixTab,
                   const SizedBox(width: 4),
-                  _TabBtn(label: 'Employee Daily Work Reports ($dailyCount)', selected: _tab == 1, onTap: () => setState(() => _tab = 1)),
+                  dailyTab,
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: mobile ? 14 : 20),
             if (_tab == 0) const MonthlyMatrixTab() else const DailyReportsTab(),
           ],
         ),
@@ -51,18 +84,46 @@ class _ReportsMainScreenState extends ConsumerState<ReportsMainScreen> {
 class _TabBtn extends StatelessWidget {
   final String label;
   final bool selected;
+  final bool expand;
   final VoidCallback onTap;
-  const _TabBtn({required this.label, required this.selected, required this.onTap});
+
+  const _TabBtn({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.expand = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final text = Text(
+      label,
+      maxLines: 1,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: selected ? Colors.white : NotificationColors.textMedium,
+      ),
+    );
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(color: selected ? NotificationColors.primary : Colors.transparent, borderRadius: BorderRadius.circular(8)),
-        child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : NotificationColors.textMedium)),
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(
+          horizontal: expand ? 8 : 16,
+          vertical: expand ? 12 : 10,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? NotificationColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        // On phones the text shrinks a little instead of being cut off.
+        child: expand
+            ? FittedBox(fit: BoxFit.scaleDown, child: text)
+            : text,
       ),
     );
   }

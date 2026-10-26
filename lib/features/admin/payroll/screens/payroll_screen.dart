@@ -22,6 +22,7 @@ import 'dart:io' show File;
 import 'package:path_provider/path_provider.dart';
 import '../../reports/utils/csv_export_web_stub.dart'
 if (dart.library.html) '../../reports/utils/csv_export_web_real.dart' as platform;
+
 class PayrollScreen extends StatefulWidget {
   /// True when shown inside the admin dashboard (the sidebar stays visible).
   final bool embedded;
@@ -532,7 +533,6 @@ class _PayrollScreenState extends State<PayrollScreen>
     final filename = 'Payroll_${PayrollFormat.monthName(_month)}_$_year.xlsx';
 
     try {
-      // Remove the filename argument from here
       final bytes = PayrollCsv.buildExcel(slips);
 
       if (kIsWeb) {
@@ -551,7 +551,6 @@ class _PayrollScreenState extends State<PayrollScreen>
       _toast('Failed to export: $e', error: true);
     }
   }
-
 
   Future<void> _refundPf(PfBalance balance) async {
     if (_busy) return;
@@ -612,11 +611,9 @@ class _PayrollScreenState extends State<PayrollScreen>
   // ==========================================================
 
   @override
-  @override
   Widget build(BuildContext context) {
     final mobile = _isMobile;
 
-    // Core body content
     final bodyContent = SafeArea(
       child: ListView(
         padding: EdgeInsets.fromLTRB(
@@ -634,10 +631,10 @@ class _PayrollScreenState extends State<PayrollScreen>
           _header(mobile),
           const SizedBox(height: 16),
 
-          // 1. The Tab Card (Monthly Batch, PT, PF)
+          // Tab card (Monthly Batch, PT, PF)
           _tabsCard(mobile),
 
-          // 2. The Employee Table (ALWAYS VISIBLE NOW)
+          // Employee list (always visible)
           const SizedBox(height: 16),
           EmployeeSalaryList(
             employees: _employees,
@@ -701,6 +698,7 @@ class _PayrollScreenState extends State<PayrollScreen>
       body: bodyContent,
     );
   }
+
   // ==========================================================
   // HEADER
   // ==========================================================
@@ -710,7 +708,8 @@ class _PayrollScreenState extends State<PayrollScreen>
     final years = <int>{
       for (var y = now.year - 3; y <= now.year + 1; y++) y,
       _year,
-    }.toList()..sort();
+    }.toList()
+      ..sort();
 
     final title = Text(
       'Payroll & Salary Engine',
@@ -725,14 +724,15 @@ class _PayrollScreenState extends State<PayrollScreen>
       value: _month,
       items: {for (var m = 1; m <= 12; m++) m: PayrollFormat.monthName(m)},
       onChanged: (v) => _setPeriod(month: v),
-      width: 150,
+      width: mobile ? double.infinity : 150,
+      icon: mobile ? Icons.calendar_month_rounded : null,
     );
 
     final year = _dropdown(
       value: _year,
       items: {for (final y in years) y: '$y'},
       onChanged: (v) => _setPeriod(year: v),
-      width: 110,
+      width: mobile ? double.infinity : 110,
     );
 
     final slips = _slips;
@@ -741,21 +741,30 @@ class _PayrollScreenState extends State<PayrollScreen>
     ButtonStyle outlined() => OutlinedButton.styleFrom(
       foregroundColor: _textDark,
       side: const BorderSide(color: Color(0xFFE5E7EB)),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+      padding: EdgeInsets.symmetric(
+        horizontal: mobile ? 8 : 18,
+        vertical: 15,
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      textStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+      textStyle: TextStyle(
+        fontSize: mobile ? 12.5 : 13.5,
+        fontWeight: FontWeight.w700,
+      ),
     );
 
     final export = OutlinedButton(
       onPressed: hasSlips ? _exportCsv : null,
       style: outlined(),
-      child: const Text('Export CSV'),
+      child: const Text('Export Excel', maxLines: 1),
     );
 
     final email = OutlinedButton(
       onPressed: (hasSlips && !_busy) ? _emailAll : null,
       style: outlined(),
-      child: const Text('Email All Payslips'),
+      child: Text(
+        mobile ? 'Email Payslips' : 'Email All Payslips',
+        maxLines: 1,
+      ),
     );
 
     final generate = FilledButton(
@@ -779,14 +788,50 @@ class _PayrollScreenState extends State<PayrollScreen>
           : const Text('Calculate & Generate Payroll'),
     );
 
+    final decoration = BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: _border),
+    );
+
+    // ---------- MOBILE: stacked, full width ----------
+    if (mobile) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: decoration,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            title,
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(flex: 3, child: month),
+                const SizedBox(width: 10),
+                Expanded(flex: 2, child: year),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: export),
+                const SizedBox(width: 10),
+                Expanded(child: email),
+              ],
+            ),
+            const SizedBox(height: 10),
+            generate,
+          ],
+        ),
+      );
+    }
+
+    // ---------- DESKTOP / TABLET ----------
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(mobile ? 14 : 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border),
-      ),
+      padding: const EdgeInsets.all(20),
+      decoration: decoration,
       child: Wrap(
         spacing: 12,
         runSpacing: 12,
@@ -795,7 +840,7 @@ class _PayrollScreenState extends State<PayrollScreen>
           title,
           month,
           year,
-          if (!mobile) const SizedBox(width: 20),
+          const SizedBox(width: 20),
           export,
           email,
           generate,
@@ -809,6 +854,7 @@ class _PayrollScreenState extends State<PayrollScreen>
     required Map<int, String> items,
     required ValueChanged<int> onChanged,
     required double width,
+    IconData? icon,
   }) {
     return SizedBox(
       width: width,
@@ -817,8 +863,13 @@ class _PayrollScreenState extends State<PayrollScreen>
           isDense: true,
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 14,
+          prefixIcon: icon == null
+              ? null
+              : Icon(icon, size: 18, color: const Color(0xFF7A8494)),
+          prefixIconConstraints:
+          const BoxConstraints(minWidth: 38, minHeight: 20),
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: icon == null ? 14 : 0,
             vertical: 13,
           ),
           border: OutlineInputBorder(
@@ -889,9 +940,9 @@ class _PayrollScreenState extends State<PayrollScreen>
               fontWeight: FontWeight.w600,
             ),
             tabs: [
-              Tab(text: 'Monthly Payroll Batch$count'),
-              const Tab(text: 'PT Compliance Report'),
-              const Tab(text: 'PF (5%) Accumulation & Refund History'),
+              Tab(text: mobile ? 'Payroll Batch$count' : 'Monthly Payroll Batch$count'),
+              Tab(text: mobile ? 'PT Report' : 'PT Compliance Report'),
+              Tab(text: mobile ? 'PF (5%) & Refunds' : 'PF (5%) Accumulation & Refund History'),
             ],
           ),
           Padding(
@@ -922,12 +973,13 @@ class _PayrollScreenState extends State<PayrollScreen>
           busy: _busy,
           onRetry: _loadPf,
           onRefund: _refundPf,
-          employees: _employees, // <-- ADD THIS LINE
+          employees: _employees,
         );
       default:
         return _batchTab();
     }
   }
+
   Widget _batchTab() {
     final slips = _displaySlips;
     if (slips == null && _slipsError != null && !_slipsLoading) {

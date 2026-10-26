@@ -4,6 +4,9 @@ import '../models/shift_model.dart';
 
 // =================================================================
 // SHIFT CARD
+//
+//  - Web / tablet : fixed 268 px cards that sit side by side (Wrap).
+//  - Phone        : the card fills the full width of the section.
 // =================================================================
 
 class ShiftCard extends StatelessWidget {
@@ -14,10 +17,24 @@ class ShiftCard extends StatelessWidget {
   static const Color divider = Color(0xFFE9ECF0);
   static const Color danger = Color(0xFFC62828);
 
+  /// Below this screen width the card becomes full width.
+  static const double _phoneBreakpoint = 600;
+
+  /// Card width on web / tablet.
+  static const double _cardWidth = 268;
+
+  /// Horizontal space taken by the screen around the card on phones:
+  /// page padding (14 + 14) + section padding (14 + 14) + section border (2).
+  /// If you change those paddings in shift_roster_screen.dart, change this.
+  static const double _phoneSideSpace = 58;
+
   final ShiftModel shift;
   final Color accentColor;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+
+  /// Optional: force a width (overrides the automatic one).
+  final double? width;
 
   const ShiftCard({
     super.key,
@@ -25,12 +42,33 @@ class ShiftCard extends StatelessWidget {
     required this.accentColor,
     required this.onEdit,
     required this.onDelete,
+    this.width,
   });
+
+  double _resolveWidth(BuildContext context) {
+    if (width != null) return width!;
+
+    final screenWidth = MediaQuery.sizeOf(context).width;
+
+    if (screenWidth < _phoneBreakpoint) {
+      return screenWidth - _phoneSideSpace;
+    }
+
+    return _cardWidth;
+  }
+
+  /// "Night Shift (Overnight)" already says it - do not add it twice.
+  String get _title {
+    final alreadyHasTag = shift.name.toLowerCase().contains('overnight');
+    return (shift.isOvernight && !alreadyHasTag)
+        ? '${shift.name} (Overnight)'
+        : shift.name;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 268,
+      width: _resolveWidth(context),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -65,9 +103,7 @@ class ShiftCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      shift.isOvernight
-                          ? '${shift.name} (Overnight)'
-                          : shift.name,
+                      _title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
