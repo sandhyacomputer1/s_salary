@@ -6,11 +6,14 @@ import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 /// Full screen selfie screen used for Check In / Check Out.
 ///
 ///  1. Opens the FRONT camera automatically (live preview + face guide).
 ///  2. Employee taps the shutter -> photo preview.
+///     If the camera is not available (or the employee prefers it) a photo
+///     can be chosen from the GALLERY instead.
 ///  3. "Retake" or "Confirm" -> [onConfirm] is called with the photo
 ///     (data:image/jpeg;base64,...). While it runs the screen shows a
 ///     progress state. If it throws, the error is shown here and the
@@ -19,12 +22,17 @@ import 'package:flutter/material.dart';
 /// Back / Cancel closes the screen with `false` (back to dashboard).
 class EmpAttendanceCameraScreen extends StatefulWidget {
   final bool isCheckIn;
+
+  /// Show the "Choose from gallery" option.
+  final bool allowGallery;
+
   final Future<void> Function(String photoDataUri) onConfirm;
 
   const EmpAttendanceCameraScreen({
     super.key,
     required this.isCheckIn,
     required this.onConfirm,
+    this.allowGallery = true,
   });
 
   @override
@@ -38,6 +46,8 @@ class _EmpAttendanceCameraScreenState extends State<EmpAttendanceCameraScreen>
   static const Color _checkInColor = Color(0xFFE8622C);
   static const Color _checkOutColor = Color(0xFFDC4A26);
 
+  final ImagePicker _picker = ImagePicker();
+
   List<CameraDescription> _cameras = [];
   int _cameraIndex = 0;
   CameraController? _controller;
@@ -45,10 +55,12 @@ class _EmpAttendanceCameraScreenState extends State<EmpAttendanceCameraScreen>
   bool _ready = false;
   bool _capturing = false;
   bool _submitting = false;
+  bool _picking = false;
+  bool _fromGallery = false;
   String? _initError;
   String? _submitError;
 
-  Uint8List? _photo; // captured image
+  Uint8List? _photo; // captured / picked image
 
   Color get _accent => widget.isCheckIn ? _checkInColor : _checkOutColor;
   String get _actionName => widget.isCheckIn ? 'Check In' : 'Check Out';
@@ -151,7 +163,11 @@ class _EmpAttendanceCameraScreenState extends State<EmpAttendanceCameraScreen>
     final code = e.code.toLowerCase();
 
     if (code.contains('denied') || code.contains('permission')) {
-      return 'Camera permission is blocked.\n'
+      return widget.allowGallery
+          ? 'Camera permission is blocked.\n'
+          'Allow Camera access in your phone settings, '
+          'or choose a photo from your gallery.'
+          : 'Camera permission is blocked.\n'
           'Please allow Camera access for this app in your phone settings.';
     }
 
@@ -185,6 +201,7 @@ class _EmpAttendanceCameraScreenState extends State<EmpAttendanceCameraScreen>
       if (!mounted) return;
       setState(() {
         _photo = bytes;
+        _fromGallery = false;
         _capturing = false;
         _submitError = null;
       });
@@ -197,10 +214,51 @@ class _EmpAttendanceCameraScreenState extends State<EmpAttendanceCameraScreen>
     }
   }
 
+  // ============================================================
+  // GALLERY
+  // ============================================================
+
+  Future<void> _pickFromGallery() async {
+    if (_capturing || _submitting || _picking) return;
+
+    setState(() => _picking = true);
+
+    try {
+      final file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1080, // keeps the upload small
+        imageQuality: 80,
+      );
+
+      if (file == null) {
+        // user cancelled
+        if (mounted) setState(() => _picking = false);
+        return;
+      }
+
+      final bytes = await file.readAsBytes();
+
+      if (!mounted) return;
+      setState(() {
+        _photo = bytes;
+        _fromGallery = true;
+        _picking = false;
+        _submitError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _picking = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the gallery. Try again.')),
+      );
+    }
+  }
+
   void _retake() {
     if (_submitting) return;
     setState(() {
       _photo = null;
+      _fromGallery = false;
       _submitError = null;
     });
 
@@ -401,7 +459,7 @@ class _EmpAttendanceCameraScreenState extends State<EmpAttendanceCameraScreen>
   }
 
   Widget _buildFrameContent() {
-    // Captured photo review
+    // Captured / picked photo review
     if (_photo != null) {
       return Stack(
         fit: StackFit.expand,
@@ -416,18 +474,20 @@ class _EmpAttendanceCameraScreenState extends State<EmpAttendanceCameraScreen>
                 color: Colors.black.withValues(alpha: 0.55),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.check_circle_rounded,
+                    _fromGallery
+                        ? Icons.photo_library_rounded
+                        : Icons.check_circle_rounded,
                     size: 14,
-                    color: Color(0xFF22C55E),
+                    color: const Color(0xFF22C55E),
                   ),
-                  SizedBox(width: 6),
+                  const SizedBox(width: 6),
                   Text(
-                    'Photo captured',
-                    style: TextStyle(
+                    _fromGallery ? 'Photo selected' : 'Photo captured',
+                    style: const TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
@@ -460,38 +520,66 @@ class _EmpAttendanceCameraScreenState extends State<EmpAttendanceCameraScreen>
         color: const Color(0xFF1A1512),
         padding: const EdgeInsets.all(24),
         alignment: Alignment.center,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.videocam_off_outlined,
-              size: 44,
-              color: Colors.white.withValues(alpha: 0.6),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              _initError!,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.5,
-                color: Colors.white.withValues(alpha: 0.8),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.videocam_off_outlined,
+                size: 44,
+                color: Colors.white.withValues(alpha: 0.6),
               ),
-            ),
-            const SizedBox(height: 18),
-            OutlinedButton.icon(
-              onPressed: _startCamera,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Try again'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.4)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+              const SizedBox(height: 14),
+              Text(
+                _initError!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.5,
+                  color: Colors.white.withValues(alpha: 0.8),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 18),
+              OutlinedButton.icon(
+                onPressed: _startCamera,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Try again'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.4)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              if (widget.allowGallery) ...[
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: _picking ? null : _pickFromGallery,
+                  icon: _picking
+                      ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                      : const Icon(Icons.photo_library_outlined, size: 18),
+                  label: const Text('Choose from gallery'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _accent,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: _accent.withValues(alpha: 0.6),
+                    disabledForegroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       );
     }
@@ -603,7 +691,7 @@ class _EmpAttendanceCameraScreenState extends State<EmpAttendanceCameraScreen>
   }
 
   Widget _buildCaptureControls() {
-    final canShoot = _ready && !_capturing;
+    final canShoot = _ready && !_capturing && !_picking;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -664,21 +752,31 @@ class _EmpAttendanceCameraScreenState extends State<EmpAttendanceCameraScreen>
           ),
         ),
 
-        // Flip camera
+        // Gallery + flip camera
         SizedBox(
           width: 96,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: _cameras.length > 1
-                ? IconButton(
-              tooltip: 'Switch camera',
-              onPressed: _switchCamera,
-              icon: const Icon(
-                Icons.flip_camera_android_rounded,
-                color: Colors.white,
-              ),
-            )
-                : null,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (widget.allowGallery)
+                IconButton(
+                  tooltip: 'Choose from gallery',
+                  onPressed: (_capturing || _picking) ? null : _pickFromGallery,
+                  icon: const Icon(
+                    Icons.photo_library_outlined,
+                    color: Colors.white,
+                  ),
+                ),
+              if (_cameras.length > 1)
+                IconButton(
+                  tooltip: 'Switch camera',
+                  onPressed: _switchCamera,
+                  icon: const Icon(
+                    Icons.flip_camera_android_rounded,
+                    color: Colors.white,
+                  ),
+                ),
+            ],
           ),
         ),
       ],

@@ -30,6 +30,15 @@ class _EmployeeSalaryScreenState extends ConsumerState<EmployeeSalaryScreen> {
   static String _clean(Object e) =>
       e.toString().replaceFirst('Exception: ', '');
 
+  /// Page padding that follows the real width of the area, so the screen
+  /// fits when the sidebar is open, hidden, or on a phone.
+  static double _pagePadFor(double width) {
+    if (width < 420) return 10;
+    if (width < 700) return 14;
+    if (width < 1000) return 18;
+    return SalarySpacing.pagePadding;
+  }
+
   void _toggleBreakdown(EmployeeSalarySlipModel s) {
     final key = (month: s.month, year: s.year);
     setState(() => _selected = _selected == key ? null : key);
@@ -54,71 +63,77 @@ class _EmployeeSalaryScreenState extends ConsumerState<EmployeeSalaryScreen> {
 
     final body = MediaQuery(
       data: media.copyWith(textScaler: clamped),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(SalarySpacing.pagePadding),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: SalarySpacing.maxContentWidth,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                structureAsync.when(
-                  loading: () => const _CardSkeleton(height: 160),
-                  error: (e, _) => _ErrorCard(
-                    title: 'Active Salary Package Structure',
-                    message: _clean(e),
-                    onRetry: () => ref.invalidate(salaryStructureProvider),
-                  ),
-                  data: (s) => SalaryStructureCard(structure: s),
-                ),
-                const SizedBox(height: SalarySpacing.cardGap),
+      // LayoutBuilder gives the width that is really free (sidebar open,
+      // hidden, or phone) - the content always fills it.
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final pad = _pagePadFor(constraints.maxWidth);
 
-                // Inline breakdown (appears between structure & history)
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeInOut,
-                  alignment: Alignment.topCenter,
-                  child: _selected == null
-                      ? const SizedBox(width: double.infinity)
-                      : Padding(
-                    padding: const EdgeInsets.only(
-                      bottom: SalarySpacing.cardGap,
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(pad),
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  structureAsync.when(
+                    loading: () => const _CardSkeleton(height: 160),
+                    error: (e, _) => _ErrorCard(
+                      title: 'Active Salary Package Structure',
+                      message: _clean(e),
+                      onRetry: () => ref.invalidate(salaryStructureProvider),
                     ),
-                    child: SalarySlipPanel(
-                      key: ValueKey('${_selected!.year}-${_selected!.month}'),
-                      month: _selected!.month,
-                      year: _selected!.year,
-                      busy: _busy,
-                      onDownloadPdf: () => _downloadOrPrintHtml(
+                    data: (s) => SalaryStructureCard(structure: s),
+                  ),
+                  const SizedBox(height: SalarySpacing.cardGap),
+
+                  // Inline breakdown (appears between structure & history)
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeInOut,
+                    alignment: Alignment.topCenter,
+                    child: _selected == null
+                        ? const SizedBox(width: double.infinity)
+                        : Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: SalarySpacing.cardGap,
+                      ),
+                      child: SalarySlipPanel(
+                        key: ValueKey(
+                            '${_selected!.year}-${_selected!.month}'),
                         month: _selected!.month,
                         year: _selected!.year,
+                        busy: _busy,
+                        onDownloadPdf: () => _downloadOrPrintHtml(
+                          month: _selected!.month,
+                          year: _selected!.year,
+                        ),
+                        onClose: () => setState(() => _selected = null),
                       ),
-                      onClose: () => setState(() => _selected = null),
                     ),
                   ),
-                ),
 
-                slipsAsync.when(
-                  loading: () => const _CardSkeleton(height: 280),
-                  error: (e, _) => _ErrorCard(
-                    title: 'My Monthly Payslips & Salary History',
-                    message: _clean(e),
-                    onRetry: () => ref.invalidate(salarySlipsProvider),
+                  slipsAsync.when(
+                    loading: () => const _CardSkeleton(height: 280),
+                    error: (e, _) => _ErrorCard(
+                      title: 'My Monthly Payslips & Salary History',
+                      message: _clean(e),
+                      onRetry: () => ref.invalidate(salarySlipsProvider),
+                    ),
+                    data: (slips) => _HistorySection(
+                      slips: slips,
+                      selected: _selected,
+                      compact: constraints.maxWidth < 600,
+                      onViewBreakdown: _toggleBreakdown,
+                      onPdfPrint: _pdfPrint,
+                    ),
                   ),
-                  data: (slips) => _HistorySection(
-                    slips: slips,
-                    selected: _selected,
-                    onViewBreakdown: _toggleBreakdown,
-                    onPdfPrint: _pdfPrint,
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
+                  const SizedBox(height: 8),
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
 
@@ -188,6 +203,9 @@ class _EmployeeSalaryScreenState extends ConsumerState<EmployeeSalaryScreen> {
 class _HistorySection extends StatelessWidget {
   final List<EmployeeSalarySlipModel> slips;
   final _SlipKey? selected;
+
+  /// True on phones / narrow areas: tighter card padding.
+  final bool compact;
   final ValueChanged<EmployeeSalarySlipModel> onViewBreakdown;
   final ValueChanged<EmployeeSalarySlipModel> onPdfPrint;
 
@@ -196,14 +214,15 @@ class _HistorySection extends StatelessWidget {
     required this.selected,
     required this.onViewBreakdown,
     required this.onPdfPrint,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: SalarySpacing.cardPaddingH,
-        vertical: SalarySpacing.cardPaddingV,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 12 : SalarySpacing.cardPaddingH,
+        vertical: compact ? 14 : SalarySpacing.cardPaddingV,
       ),
       decoration: BoxDecoration(
         color: SalaryColors.surface,

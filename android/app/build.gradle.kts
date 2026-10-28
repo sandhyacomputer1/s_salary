@@ -17,7 +17,7 @@ val localProps = Properties().apply {
 
 android {
     namespace = "com.sandhyasofttech.s_salary"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

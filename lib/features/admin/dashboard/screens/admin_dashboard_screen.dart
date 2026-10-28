@@ -23,6 +23,11 @@ import '../../calendar/screens/calendar_screen.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../leaves/screens/leave_screen.dart';
 import '../../team_roles/screens/team_roles_screen.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+import '../widgets/admin_notifications_panel/admin_notifications_panel.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -61,11 +66,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   final EmployeeService _employeeService = EmployeeService();
   final LeaveService _leaveService = LeaveService();
   final ExpenseService _expenseService = ExpenseService();
+  /// The permission pop-ups are shown once each time the app is opened.
+  static bool _askedThisSession = false;
 
+  // Which permissions to ask when the dashboard opens
+  static const bool _askNotificationPermission = true;
+  static const bool _askLocationPermission = false; // turn on if admin uses GPS
+  static const bool _askCameraPermission = false; // turn on if admin takes photos
   List<Employee> _employees = [];
   List<Employee> _archivedEmployees = [];
   int _pendingLeaves = 0;
   int _pendingExpenses = 0;
+  LicenseInfo? _license; // NEW: data for the "Software Expiry Details" card
+
 
   // ==========================================================
   // STATE
@@ -89,10 +102,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _entranceController = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
     _updateDateTime();
-    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) => _updateDateTime());
+    _clockTimer = Timer.periodic(
+      const Duration(seconds: 30),
+          (_) => _updateDateTime(),
+    );
     _loadDashboardData();
+    _loadLicense(); // NEW
+
+    // Ask for permissions as soon as the dashboard is on screen.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestStartupPermissions();
+    });
   }
 
   @override
@@ -117,6 +142,96 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     });
   }
 
+  Future<bool?> _askDialog({
+    required String title,
+    required String message,
+    required String action,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: _textDark,
+          ),
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(
+            fontSize: 13.5,
+            height: 1.45,
+            color: Color(0xFF4B5563),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: _primary),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _requestStartupPermissions() async {
+    if (_askedThisSession) return;
+    _askedThisSession = true;
+
+    if (kIsWeb) return; // the browser asks by itself on the web
+
+    final blocked = <String>[]; // permissions that can only be fixed in Settings
+
+    try {
+      // 1) Notifications (Android 13+ / iOS)
+      if (_askNotificationPermission) {
+        var notif = await Permission.notification.status;
+        if (notif.isDenied) notif = await Permission.notification.request();
+        if (notif.isPermanentlyDenied) blocked.add('Notifications');
+      }
+
+      // 2) Location (optional)
+      if (_askLocationPermission) {
+        var location = await Geolocator.checkPermission();
+        if (location == LocationPermission.denied) {
+          location = await Geolocator.requestPermission();
+        }
+        if (location == LocationPermission.deniedForever) {
+          blocked.add('Location');
+        }
+      }
+
+      // 3) Camera (optional)
+      if (_askCameraPermission) {
+        var camera = await Permission.camera.status;
+        if (camera.isDenied) camera = await Permission.camera.request();
+        if (camera.isPermanentlyDenied) blocked.add('Camera');
+      }
+    } catch (e) {
+      debugPrint('PERMISSION REQUEST ERROR: $e');
+    }
+
+    // Something was blocked ("Don't ask again") -> only Settings can fix it.
+    if (blocked.isNotEmpty && mounted) {
+      final open = await _askDialog(
+        title: '${blocked.join(' & ')} blocked',
+        message:
+        'Please allow ${blocked.join(' and ')} in the app settings to '
+            'receive check-in and check-out alerts.',
+        action: 'Open Settings',
+      );
+      if (open == true) await openAppSettings();
+    }
+  }
   Future<void> _loadDashboardData() async {
     if (!mounted) return;
     setState(() { _isLoading = true; _errorMessage = null; });
@@ -172,9 +287,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _refreshDashboard() async {
     if (_isRefreshing) return;
     setState(() => _isRefreshing = true);
+    _loadLicense(); // NEW
     await _loadDashboardData();
   }
+  /// Loads the licence data (start date, valid until, duration).
+  Future<void> _loadLicense() async {
+    final info = await LicenseInfo.fetch();
+    if (!mounted) return;
+    setState(() => _license = info);
+  }
 
+  /// The number shown on the red badge of the bell icon.
+  int get _notificationCount => adminNotificationCount(
+    license: _license,
+    pendingLeaves: _pendingLeaves,
+    pendingExpenses: _pendingExpenses,
+  );
+
+  /// Opens the notifications panel under the bell icon.
+  Future<void> _openNotificationsPanel() {
+    return showAdminNotificationsPanel(
+      context,
+      license: _license,
+      pendingLeaves: _pendingLeaves,
+      pendingExpenses: _pendingExpenses,
+      // "View all notifications" -> the check-in / check-out notifications screen
+      onViewAll: () => setState(() => _selectedScreenIndex = 8),
+      // tapping the pending cards opens Leaves / Expenses
+      onOpenLeaves: () => setState(() => _selectedScreenIndex = 3),
+      onOpenExpenses: () => setState(() => _selectedScreenIndex = 7),
+    );
+  }
   void _onNavigationSelected(int index) {
     if (_isMobile) Navigator.pop(context); // Close drawer on mobile
     setState(() => _selectedScreenIndex = index);
@@ -244,15 +387,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (_selectedScreenIndex == 3) titleText = 'Leave Requests';
     if (_selectedScreenIndex == 4) titleText = 'Shift Roster & Planner';
     if (_selectedScreenIndex == 5) titleText = 'Field GPS Tracking';
-    if (_selectedScreenIndex == 6) titleText = 'Departments'; // Add this
+    if (_selectedScreenIndex == 6) titleText = 'Departments';
     if (_selectedScreenIndex == 7) titleText = 'Expenses';
-    if (_selectedScreenIndex == 8) titleText = 'Check-In & Check-Out Notifications';
+    if (_selectedScreenIndex == 8) {
+      // shorter on phones so it fits in the top bar
+      titleText = _isMobile
+          ? 'Notifications'
+          : 'Check-In & Check-Out Notifications';
+    }
     if (_selectedScreenIndex == 9) titleText = 'Audit Trail';
     if (_selectedScreenIndex == 10) titleText = 'Payroll & Salary';
     if (_selectedScreenIndex == 11) titleText = 'Branches & Locations';
     if (_selectedScreenIndex == 12) titleText = 'Team & Roles';
     if (_selectedScreenIndex == 13) titleText = 'Settings';
-    if (_selectedScreenIndex == 14) titleText = 'Reports & Matrix'; // <-- ADDED
+    if (_selectedScreenIndex == 14) titleText = 'Reports & Matrix';
 
     return AppBar(
       elevation: 0,
@@ -263,37 +411,67 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         children: [
           if (!_isMobile) ...[
             Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(color: const Color(0xFFFFEEE7), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.account_balance_wallet_outlined, color: _primary, size: 20),
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFEEE7),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.account_balance_wallet_outlined,
+                color: _primary,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 10),
           ],
-          Text(titleText, style: const TextStyle(color: _textDark, fontSize: 18, fontWeight: FontWeight.w700)),
+          // Flexible + ellipsis = a long title can never overflow
+          Flexible(
+            child: Text(
+              titleText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _textDark,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
         ],
       ),
       actions: [
         if (!_isMobile) ...[
-          Padding(padding: const EdgeInsets.symmetric(vertical: 9), child: _buildDateTimeChip()),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: _buildDateTimeChip(),
+          ),
           const SizedBox(width: 8),
         ],
         IconButton(
           tooltip: 'Refresh Dashboard',
           onPressed: _isLoading ? null : _refreshDashboard,
-          icon: _isRefreshing ? const SizedBox(width: 19, height: 19, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.refresh_rounded),
+          icon: _isRefreshing
+              ? const SizedBox(
+            width: 19,
+            height: 19,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+              : const Icon(Icons.refresh_rounded),
         ),
         IconButton(
           tooltip: 'Notifications',
-          onPressed: () => _onNavigationSelected(8),
-          icon: const Icon(Icons.notifications_none_rounded),
-        ),
-        // ADDED BELOW:
-
-        const SizedBox(width: 10),
+          onPressed: _openNotificationsPanel,
+          icon: Badge(
+            isLabelVisible: _notificationCount > 0,
+            label: Text('$_notificationCount'),
+            backgroundColor: const Color(0xFFE53935),
+            child: const Icon(Icons.notifications_none_rounded),
+          ),
+        ),        const SizedBox(width: 10),
       ],
     );
   }
-
   Widget _buildBodyContent() {
     if (_selectedScreenIndex == 1) return const EmployeesScreen(embedded: true);
     if (_selectedScreenIndex == 2) return const CalendarScreen(embedded: true);
@@ -1347,6 +1525,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _openAddEmployee() async {
     final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddEmployeeScreen()));
     if (result == true) await _loadDashboardData();
+
   }
 
   Future<void> _logout() async {

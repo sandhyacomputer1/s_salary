@@ -6,6 +6,8 @@ import '../utils/attendance_resolver.dart';
 import '../utils/attendance_theme.dart';
 
 /// Day box of the current month (white box, soft status pill - like the web).
+/// When the day was marked by the admin, a "Marked by Admin" tag is shown
+/// under the status pill (phones: a small shield badge in the corner).
 class AttendanceDayCell extends StatelessWidget {
   final AttendanceDayInfo info;
   final bool compact;
@@ -53,7 +55,7 @@ class AttendanceDayCell extends StatelessWidget {
   Color get _numberColor =>
       info.isToday ? AttendanceColors.primary : AttendanceColors.textDark;
 
-  // ---------------- phones: number + tiny code pill ----------------
+  // ---------------- phones: number + tiny code pill + admin badge ----------------
 
   Widget _compact(AttendanceStatusStyle? style) {
     return Stack(
@@ -103,17 +105,15 @@ class AttendanceDayCell extends StatelessWidget {
             ],
           ),
         ),
+        // Marked by admin -> small shield badge (tap the day for details)
         if (info.markedByAdmin)
-          Positioned(
-            right: 1,
-            top: 1,
-            child: Container(
-              width: 6,
-              height: 6,
-              decoration: const BoxDecoration(
-                color: AttendanceColors.primary,
-                shape: BoxShape.circle,
-              ),
+          const Positioned(
+            right: 0,
+            top: 0,
+            child: Icon(
+              Icons.verified_user_rounded,
+              size: 11,
+              color: AttendanceColors.primary,
             ),
           ),
       ],
@@ -125,8 +125,6 @@ class AttendanceDayCell extends StatelessWidget {
   Widget _regular(AttendanceStatusStyle? style) {
     return LayoutBuilder(
       builder: (context, c) {
-        final roomForTag = c.maxHeight >= 70;
-
         final timeText = info.checkInLabel;
         final pillText =
         timeText == null ? info.label : '${info.label} ($timeText)';
@@ -142,26 +140,14 @@ class AttendanceDayCell extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      '${info.day}',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: _numberColor,
-                        height: 1.2,
-                      ),
-                    ),
-                    const Spacer(),
-                    // when there is no room for the tag, show a small icon
-                    if (info.markedByAdmin && !roomForTag)
-                      const Icon(
-                        Icons.verified_user_outlined,
-                        size: 13,
-                        color: AttendanceColors.primary,
-                      ),
-                  ],
+                Text(
+                  '${info.day}',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: _numberColor,
+                    height: 1.2,
+                  ),
                 ),
                 const SizedBox(height: 5),
                 if (style != null)
@@ -207,7 +193,9 @@ class AttendanceDayCell extends StatelessWidget {
                       ),
                     ),
                   ),
-                if (info.markedByAdmin && roomForTag) ...[
+
+                // "Marked by Admin" - always shown when the admin marked it
+                if (info.markedByAdmin) ...[
                   const SizedBox(height: 4),
                   Row(
                     children: [
@@ -222,16 +210,29 @@ class AttendanceDayCell extends StatelessWidget {
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(color: const Color(0xFF9CA3AF)),
                           ),
-                          child: const Text(
-                            'Marked by Admin',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w600,
-                              color: _adminTagText,
-                              height: 1.2,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.verified_user_outlined,
+                                size: 10,
+                                color: _adminTagText,
+                              ),
+                              const SizedBox(width: 3),
+                              const Flexible(
+                                child: Text(
+                                  'Marked by Admin',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: _adminTagText,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),

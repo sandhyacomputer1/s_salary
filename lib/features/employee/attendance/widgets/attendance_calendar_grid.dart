@@ -19,12 +19,17 @@ class AttendanceCalendarGrid extends StatelessWidget {
   /// false -> fixed cell height (the page scrolls).
   final bool fillHeight;
 
+  /// Cell height on phones when [fillHeight] is false. The screen makes it
+  /// taller on big phones so the calendar fills the screen.
+  final double compactCellHeight;
+
   const AttendanceCalendarGrid({
     super.key,
     required this.month,
     required this.year,
     required this.days,
     this.fillHeight = false,
+    this.compactCellHeight = 56,
   });
 
   @override
@@ -137,7 +142,7 @@ class AttendanceCalendarGrid extends StatelessWidget {
           children: [
             header,
             const SizedBox(height: 10),
-            gridWith(compact ? 56.0 : 98.0, scrollable: false),
+            gridWith(compact ? compactCellHeight : 98.0, scrollable: false),
           ],
         );
       },

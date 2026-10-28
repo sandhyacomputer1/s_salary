@@ -20,6 +20,9 @@ class EmpDashboardShell extends StatefulWidget {
 class _EmpDashboardShellState extends State<EmpDashboardShell> {
   int _selectedIndex = 0;
 
+  /// Wide screens: sidebar shrinks to an icon rail when true.
+  bool _collapsed = false;
+
   static const Color primary = Color(0xFFE96832);
   static const Color primaryLight = Color(0xFFFFEEE7);
   static const Color textDark = Color(0xFF18212F);
@@ -31,6 +34,14 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
   static const Color danger = Color(0xFFD64545);
 
   static const double _railBreakpoint = 900;
+  static const double _sidebarFull = 260;
+  static const double _sidebarRail = 78;
+
+  /// Below this width the sidebar shows icons only (also while animating).
+  static const double _labelsMinWidth = 190;
+
+  static const Duration _sidebarAnim = Duration(milliseconds: 300);
+  static const Curve _sidebarCurve = Curves.easeInOutCubic;
 
   // Index of each item must match the switch in _buildScreen.
   static const List<_NavItem> _navItems = [
@@ -104,6 +115,9 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
 
     await SecureStorage.clearSession();
 
+    // Next user must never see this employee's dashboard data / bell count.
+    EmpDashboardScreen.clearCache();
+
     if (!mounted) return;
 
     Navigator.pushNamedAndRemoveUntil(
@@ -119,6 +133,70 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
     if (MediaQuery.of(context).size.width < _railBreakpoint) {
       Navigator.of(context).maybePop();
     }
+  }
+
+  void _toggleSidebar() => setState(() => _collapsed = !_collapsed);
+
+  // ==========================================================
+  // NOTIFICATION BELL (used in the top bar AND the mobile app bar)
+  // ==========================================================
+
+  Widget _buildBellButton() {
+    return ValueListenableBuilder<int>(
+      valueListenable: EmpDashboardScreen.notificationCount,
+      builder: (context, count, _) {
+        return Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            IconButton(
+              tooltip: 'Notifications',
+              onPressed: () => EmpDashboardScreen.showNotifications(context),
+              icon: const Icon(
+                Icons.notifications_none_rounded,
+                color: textDark,
+              ),
+            ),
+            if (count > 0)
+              Positioned(
+                top: 5,
+                right: 5,
+                child: IgnorePointer(
+                  child: TweenAnimationBuilder<double>(
+                    key: ValueKey<int>(count),
+                    tween: Tween<double>(begin: 0.6, end: 1),
+                    duration: const Duration(milliseconds: 350),
+                    curve: Curves.elasticOut,
+                    builder: (context, scale, child) =>
+                        Transform.scale(scale: scale, child: child),
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE11D48),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
   }
 
   // ==========================================================
@@ -162,20 +240,30 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
             surfaceTintColor: Colors.white,
             elevation: 0,
             iconTheme: const IconThemeData(color: textDark),
-            title: Text(
-              _navItems[_selectedIndex].label,
-              style: const TextStyle(
-                color: textDark,
-                fontWeight: FontWeight.w700,
-                fontSize: 17,
+            title: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.4),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: Text(
+                _navItems[_selectedIndex].label,
+                key: ValueKey<int>(_selectedIndex),
+                style: const TextStyle(
+                  color: textDark,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 17,
+                ),
               ),
             ),
             actions: [
-              IconButton(
-                tooltip: 'Notifications',
-                onPressed: () {},
-                icon: const Icon(Icons.notifications_none_rounded),
-              ),
+              _buildBellButton(),
               const SizedBox(width: 4),
             ],
           ),
@@ -225,26 +313,60 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
 
     return Container(
       height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 22),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: border)),
       ),
       child: Row(
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: primaryLight,
-              borderRadius: BorderRadius.circular(9),
+          // Show / hide sidebar
+          IconButton(
+            tooltip: _collapsed ? 'Show sidebar' : 'Hide sidebar',
+            onPressed: _toggleSidebar,
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (child, animation) => RotationTransition(
+                turns: Tween<double>(begin: 0.75, end: 1).animate(animation),
+                child: FadeTransition(opacity: animation, child: child),
+              ),
+              child: Icon(
+                _collapsed ? Icons.menu_rounded : Icons.menu_open_rounded,
+                key: ValueKey<bool>(_collapsed),
+                color: textDark,
+              ),
             ),
-            child: Icon(item.activeIcon, size: 18, color: primary),
+          ),
+          const SizedBox(width: 6),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 240),
+            transitionBuilder: (child, animation) =>
+                ScaleTransition(scale: animation, child: child),
+            child: Container(
+              key: ValueKey<int>(_selectedIndex),
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: primaryLight,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(item.activeIcon, size: 18, color: primary),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.4),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
               child: Align(
                 key: ValueKey<int>(_selectedIndex),
                 alignment: Alignment.centerLeft,
@@ -259,160 +381,247 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
               ),
             ),
           ),
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () {},
-            icon: const Icon(
-              Icons.notifications_none_rounded,
-              color: textDark,
-            ),
-          ),
+          _buildBellButton(),
+          const SizedBox(width: 8),
         ],
       ),
     );
   }
 
   // ==========================================================
-  // SIDEBAR
+  // SIDEBAR (collapsible)
   // ==========================================================
 
   Widget _buildSidebar({required bool isDrawer}) {
+    final inner = LayoutBuilder(
+      builder: (context, constraints) {
+        // The drawer always shows labels. On wide screens labels show only
+        // when the sidebar is wide enough (also during the animation).
+        final showLabels = isDrawer || constraints.maxWidth >= _labelsMinWidth;
+        return _buildSidebarContent(isDrawer: isDrawer, showLabels: showLabels);
+      },
+    );
+
+    if (isDrawer) {
+      return Container(color: sidebarBg, child: SafeArea(child: inner));
+    }
+
+    return AnimatedContainer(
+      duration: _sidebarAnim,
+      curve: _sidebarCurve,
+      width: _collapsed ? _sidebarRail : _sidebarFull,
+      decoration: const BoxDecoration(
+        color: sidebarBg,
+        border: Border(right: BorderSide(color: border)),
+      ),
+      child: ClipRect(child: SafeArea(child: inner)),
+    );
+  }
+
+  Widget _buildSidebarContent({
+    required bool isDrawer,
+    required bool showLabels,
+  }) {
     // Running counter so every tile gets its own entrance delay.
     var order = 0;
 
     final menu = <Widget>[];
 
     for (final section in _sections) {
-      menu.add(_sectionHeader(section.title));
+      menu.add(_sectionHeader(section.title, showLabels));
 
       for (final index in section.indices) {
-        menu.add(_navTile(index, order));
+        menu.add(_navTile(index, order, showLabels));
         order++;
       }
     }
 
-    return Container(
-      width: isDrawer ? null : 260,
-      decoration: BoxDecoration(
-        color: sidebarBg,
-        border: isDrawer
-            ? null
-            : const Border(right: BorderSide(color: border)),
-      ),
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // --------------------------------------------------
-            // BRAND
-            // --------------------------------------------------
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: primaryLight,
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.bolt_rounded,
-                      color: primary,
-                      size: 22,
-                    ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // --------------------------------------------------
+        // BRAND
+        // --------------------------------------------------
+        Padding(
+          padding: showLabels
+              ? const EdgeInsets.fromLTRB(20, 20, 20, 18)
+              : const EdgeInsets.fromLTRB(0, 20, 0, 18),
+          child: Row(
+            mainAxisAlignment:
+            showLabels ? MainAxisAlignment.start : MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: primaryLight,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.bolt_rounded,
+                  color: primary,
+                  size: 22,
+                ),
+              ),
+              if (showLabels) ...[
+                const SizedBox(width: 11),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Sandhya Salary',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: textDark,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Employee Portal',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, color: textLight),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 11),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Sandhya Salary',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: textDark,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Employee Portal',
-                          style: TextStyle(fontSize: 11, color: textLight),
-                        ),
-                      ],
+                ),
+              ],
+            ],
+          ),
+        ),
+
+        const Divider(height: 1, color: border),
+
+        // --------------------------------------------------
+        // MENU (grouped in parts)
+        // --------------------------------------------------
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.symmetric(
+              horizontal: showLabels ? 12 : 10,
+              vertical: 8,
+            ),
+            children: menu,
+          ),
+        ),
+
+        const Divider(height: 1, color: border),
+
+        // --------------------------------------------------
+        // LOGOUT  +  SHOW/HIDE BUTTON (same row, button on the right)
+        // --------------------------------------------------
+        Padding(
+          padding: EdgeInsets.all(showLabels ? 12 : 10),
+          child: showLabels
+              ? Row(
+            children: [
+              Expanded(child: _logoutButton(showLabels: true)),
+              if (!isDrawer) ...[
+                const SizedBox(width: 8),
+                _collapseButton(),
+              ],
+            ],
+          )
+              : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _collapseButton(),
+              const SizedBox(height: 6),
+              _logoutButton(showLabels: false),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _logoutButton({required bool showLabels}) {
+    return Tooltip(
+      message: showLabels ? '' : 'Logout',
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: _handleLogout,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: showLabels ? 14 : 0,
+              vertical: 12,
+            ),
+            child: Row(
+              mainAxisAlignment: showLabels
+                  ? MainAxisAlignment.start
+                  : MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.logout_rounded, size: 19, color: danger),
+                if (showLabels) ...[
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Logout',
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: danger,
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
-
-            const Divider(height: 1, color: border),
-
-            // --------------------------------------------------
-            // MENU (grouped in parts)
-            // --------------------------------------------------
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                children: menu,
-              ),
-            ),
-
-            const Divider(height: 1, color: border),
-
-            // --------------------------------------------------
-            // LOGOUT
-            // --------------------------------------------------
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: _handleLogout,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.logout_rounded, size: 19, color: danger),
-                        SizedBox(width: 12),
-                        Text(
-                          'Logout',
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
-                            color: danger,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _sectionHeader(String title) {
+  Widget _collapseButton() {
+    return Tooltip(
+      message: _collapsed ? 'Show sidebar' : 'Hide sidebar',
+      child: Material(
+        color: primary,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: _toggleSidebar,
+          child: SizedBox(
+            width: 36,
+            height: 36,
+            child: AnimatedRotation(
+              turns: _collapsed ? 0.5 : 0,
+              duration: _sidebarAnim,
+              curve: _sidebarCurve,
+              child: const Icon(
+                Icons.chevron_left_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionHeader(String title, bool showLabels) {
+    if (!showLabels) {
+      // Thin line instead of the text when only icons are visible.
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(10, 12, 10, 8),
+        child: Divider(height: 1, color: border),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
       child: Text(
         title,
+        maxLines: 1,
         style: const TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,
@@ -423,11 +632,35 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
     );
   }
 
-  Widget _navTile(int index, int order) {
+  Widget _navTile(int index, int order, bool showLabels) {
     final item = _navItems[index];
     final isSelected = index == _selectedIndex;
 
-    final tile = Padding(
+    final Widget tile = showLabels
+        ? _navTileFull(item, index, isSelected)
+        : _navTileRail(item, index, isSelected);
+
+    // Slide-in + fade when the sidebar first appears.
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: Duration(milliseconds: 300 + order * 50),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) {
+        return Opacity(
+          opacity: t,
+          child: Transform.translate(
+            offset: Offset((1 - t) * -16, 0),
+            child: child,
+          ),
+        );
+      },
+      child: tile,
+    );
+  }
+
+  /// Icon + label row (sidebar open).
+  Widget _navTileFull(_NavItem item, int index, bool isSelected) {
+    return Padding(
       padding: const EdgeInsets.only(bottom: 3),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -458,13 +691,18 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    child: Icon(
-                      isSelected ? item.activeIcon : item.icon,
-                      key: ValueKey<bool>(isSelected),
-                      size: 19,
-                      color: isSelected ? primary : textMedium,
+                  AnimatedScale(
+                    scale: isSelected ? 1.12 : 1,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutBack,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child: Icon(
+                        isSelected ? item.activeIcon : item.icon,
+                        key: ValueKey<bool>(isSelected),
+                        size: 19,
+                        color: isSelected ? primary : textMedium,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -491,22 +729,50 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
         ),
       ),
     );
+  }
 
-    // Slide-in + fade when the sidebar first appears.
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: Duration(milliseconds: 300 + order * 50),
-      curve: Curves.easeOutCubic,
-      builder: (context, t, child) {
-        return Opacity(
-          opacity: t,
-          child: Transform.translate(
-            offset: Offset((1 - t) * -16, 0),
-            child: child,
+  /// Icon only with tooltip (sidebar collapsed).
+  Widget _navTileRail(_NavItem item, int index, bool isSelected) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Tooltip(
+        message: item.label,
+        waitDuration: const Duration(milliseconds: 250),
+        preferBelow: false,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          height: 46,
+          decoration: BoxDecoration(
+            color: isSelected ? primaryLight : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
           ),
-        );
-      },
-      child: tile,
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _onSelect(index),
+              child: Center(
+                child: AnimatedScale(
+                  scale: isSelected ? 1.12 : 1,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutBack,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: Icon(
+                      isSelected ? item.activeIcon : item.icon,
+                      key: ValueKey<bool>(isSelected),
+                      size: 21,
+                      color: isSelected ? primary : textMedium,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

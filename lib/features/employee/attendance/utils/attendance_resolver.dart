@@ -72,11 +72,15 @@ class AttendanceDayInfo {
   }
 }
 
+/// [joinDate] is optional. When it is null (default) every past working day
+/// without a record is Absent - exactly like the web. Pass the employee's
+/// joining date only if days before it should NOT be shown as Absent.
 List<AttendanceDayInfo> resolveMonth({
   required int month,
   required int year,
   required List<AttendanceDayModel> records,
   required Set<int> weeklyOffs,
+  DateTime? joinDate,
 }) {
   final byDate = <String, AttendanceDayModel>{
     for (final r in records) r.date: r,
@@ -85,15 +89,9 @@ List<AttendanceDayInfo> resolveMonth({
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
 
-  // Absent is only worked out from the first record of the month onwards,
-  // so days before the employee joined are not shown as absent.
-  DateTime? firstRecord;
-  for (final r in records) {
-    final d = DateTime.tryParse(r.date);
-    if (d != null && (firstRecord == null || d.isBefore(firstRecord))) {
-      firstRecord = DateTime(d.year, d.month, d.day);
-    }
-  }
+  final joined = joinDate == null
+      ? null
+      : DateTime(joinDate.year, joinDate.month, joinDate.day);
 
   final count = AttendanceFormatters.daysInMonth(month, year);
   final result = <AttendanceDayInfo>[];
@@ -113,8 +111,8 @@ List<AttendanceDayInfo> resolveMonth({
       status = 'week_off';
       derived = true;
     } else if (date.isBefore(today) &&
-        firstRecord != null &&
-        !date.isBefore(firstRecord)) {
+        (joined == null || !date.isBefore(joined))) {
+      // Past working day with no record -> Absent (same as the web).
       status = 'absent';
       derived = true;
     }

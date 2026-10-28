@@ -7,8 +7,18 @@ import '../repositories/attendance_repository.dart';
 import '../utils/attendance_resolver.dart';
 import '../utils/attendance_theme.dart';
 import '../widgets/attendance_calendar_grid.dart';
+import '../widgets/attendance_legend.dart';
 import '../widgets/attendance_month_header.dart';
 import '../widgets/attendance_stat_chips.dart';
+
+/// Page padding that follows the real width of the area, so the screen
+/// fits when the sidebar is open, hidden, or on a phone.
+double _pagePadFor(double width) {
+  if (width < 420) return 10;
+  if (width < 700) return 14;
+  if (width < 1000) return 18;
+  return AttendanceSpacing.pagePadding;
+}
 
 class EmployeeAttendanceScreen extends ConsumerWidget {
   final bool embedded;
@@ -66,20 +76,25 @@ class EmployeeAttendanceScreen extends ConsumerWidget {
     )
         : null;
 
-    final header = AttendanceMonthHeader(
-      month: month,
-      year: year,
-      onPrev: () => shiftMonth(-1),
-      onNext: () => shiftMonth(1),
-      onMonthChanged: (m) => setMonthYear(m, year),
-      onYearChanged: (y) => setMonthYear(month, y),
-    );
+    AttendanceMonthHeader headerWith({required bool fullWidth}) {
+      return AttendanceMonthHeader(
+        month: month,
+        year: year,
+        fullWidth: fullWidth,
+        onPrev: () => shiftMonth(-1),
+        onNext: () => shiftMonth(1),
+        onMonthChanged: (m) => setMonthYear(m, year),
+        onYearChanged: (y) => setMonthYear(month, y),
+      );
+    }
+
+    final header = headerWith(fullWidth: false);
 
     final chips = days != null
         ? AttendanceStatChips(summary: summarize(days))
         : const _ChipsSkeleton();
 
-    Widget calendarArea({required bool fit}) {
+    Widget calendarArea({required bool fit, double cellHeight = 56}) {
       return historyAsync.when(
         loading: () => const Padding(
           padding: EdgeInsets.symmetric(vertical: 70),
@@ -96,6 +111,7 @@ class EmployeeAttendanceScreen extends ConsumerWidget {
           year: year,
           days: days!,
           fillHeight: fit,
+          compactCellHeight: cellHeight,
         ),
       );
     }
@@ -117,69 +133,142 @@ class EmployeeAttendanceScreen extends ConsumerWidget {
       data: media.copyWith(textScaler: clamped),
       child: LayoutBuilder(
         builder: (context, c) {
+          final pad = _pagePadFor(c.maxWidth);
+
           // Big screens (web / tablet): the whole month fits on screen.
           final fit =
               c.hasBoundedHeight && c.maxWidth >= 700 && c.maxHeight >= 560;
 
           if (fit) {
+            // Fills the free width (sidebar open OR hidden) - no max width.
             return Padding(
-              padding: const EdgeInsets.all(AttendanceSpacing.pagePadding),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: AttendanceSpacing.maxContentWidth,
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
-                    decoration: cardDecoration(),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: header,
-                        ),
-                        const SizedBox(height: 16),
-                        chips,
-                        const SizedBox(height: 18),
-                        Expanded(child: calendarArea(fit: true)),
-                      ],
+              padding: EdgeInsets.all(pad),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
+                decoration: cardDecoration(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: header,
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    chips,
+                    const SizedBox(height: 18),
+                    Expanded(child: calendarArea(fit: true)),
+                    if (days != null) ...[
+                      const SizedBox(height: 12),
+                      const AttendanceLegend(),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }
+
+          // ---------- ANDROID / PHONE ----------
+          // Month selector in its own full-width card, the calendar card
+          // below it. Day boxes grow on tall phones so the calendar fills
+          // the screen (the page still scrolls on small phones).
+          if (c.maxWidth < 600) {
+            final daysInMonth = AttendanceFormatters.daysInMonth(month, year);
+            final leading = AttendanceFormatters.weekdayOf(1, month, year) - 1;
+            final rows = (leading + daysInMonth + 6) ~/ 7;
+
+            // space used by everything except the day boxes (estimate)
+            final chipRows = c.maxWidth < 440 ? 3 : 2;
+            final chipsH = chipRows * 50.0 + (chipRows - 1) * 12;
+            const headerCardH = 40.0 + 20; // selector + card padding
+            const cardPad = 28.0; // calendar card top + bottom padding
+            const weekdayRowH = 26.0;
+            const legendH = 150.0;
+            const gaps = 12.0 + 16 + 18 + 16; // between the blocks
+
+            final free = c.maxHeight -
+                pad * 2 -
+                headerCardH -
+                cardPad -
+                chipsH -
+                weekdayRowH -
+                legendH -
+                gaps;
+            final cellH = ((free - 5.0 * (rows - 1)) / rows)
+                .floorToDouble()
+                .clamp(56.0, 84.0);
+
+            return RefreshIndicator(
+              color: AttendanceColors.primary,
+              onRefresh: refresh,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.all(pad),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // 1) month selector - own card
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: cardDecoration(),
+                      child: headerWith(fullWidth: true),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 2) calendar card
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(10, 14, 10, 14),
+                      decoration: cardDecoration(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          chips,
+                          const SizedBox(height: 18),
+                          calendarArea(fit: false, cellHeight: cellH),
+                          if (days != null) ...[
+                            const SizedBox(height: 16),
+                            const AttendanceLegend(),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );
           }
 
           // Phones / short windows: normal scrolling page.
+          final compactCard = c.maxWidth < 600;
+
           return RefreshIndicator(
             color: AttendanceColors.primary,
             onRefresh: refresh,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(AttendanceSpacing.pagePadding),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: AttendanceSpacing.maxContentWidth,
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
-                    decoration: cardDecoration(),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: header,
-                        ),
-                        const SizedBox(height: 16),
-                        chips,
-                        const SizedBox(height: 18),
-                        calendarArea(fit: false),
-                      ],
+              padding: EdgeInsets.all(pad),
+              child: Container(
+                width: double.infinity,
+                padding: compactCard
+                    ? const EdgeInsets.fromLTRB(10, 14, 10, 14)
+                    : const EdgeInsets.fromLTRB(14, 16, 14, 16),
+                decoration: cardDecoration(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: header,
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    chips,
+                    const SizedBox(height: 18),
+                    calendarArea(fit: false),
+                    if (days != null) ...[
+                      const SizedBox(height: 16),
+                      const AttendanceLegend(),
+                    ],
+                  ],
                 ),
               ),
             ),
