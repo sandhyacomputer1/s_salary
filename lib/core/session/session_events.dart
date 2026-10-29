@@ -1,29 +1,27 @@
 import 'package:flutter/material.dart';
 
-import '../routes/app_routes.dart';
+// Adjust these imports to match your actual folder structure
+import '../../core/routes/app_routes.dart';
+import '../storage/secure_storage.dart'; // 👈 MAKE SURE THIS PATH IS CORRECT
 
-/// One place that can send the user to the Login screen from anywhere
-/// (for example from ApiClient, which has no BuildContext).
-///
-/// Used ONLY when the session can no longer be restored, i.e. the server
-/// rejected the refresh token. A normal Logout button still clears the
-/// session by itself, as before.
 class SessionEvents {
   SessionEvents._();
 
-  /// Give this key to MaterialApp:  navigatorKey: SessionEvents.navigatorKey
   static final GlobalKey<NavigatorState> navigatorKey =
   GlobalKey<NavigatorState>();
 
   static bool _redirecting = false;
 
-  static void sessionExpired() {
-    // Several requests can fail together; redirect only once.
+  static void sessionExpired() async {
     if (_redirecting) return;
     _redirecting = true;
 
+    // Clear the expired tokens before redirecting!
+    await SecureStorage.clearSession();
+
     final navigator = navigatorKey.currentState;
 
+    // If navigator is null, the app hasn't set the navigatorKey yet.
     navigator?.pushNamedAndRemoveUntil(
       AppRoutes.login,
           (route) => false,
@@ -36,6 +34,7 @@ class SessionEvents {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Your session has ended. Please login again.'),
+            backgroundColor: Colors.red,
           ),
         );
       }

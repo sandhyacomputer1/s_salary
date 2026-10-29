@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/routes/app_routes.dart';
 import '../../../core/storage/secure_storage.dart';
+import '../../../core/services/connectivity_service.dart'; // 👈 Added
 import '../../../data/services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -137,6 +138,41 @@ class _LoginScreenState extends State<LoginScreen>
         ),
       );
 
+      return;
+    }
+
+    // 👇 ADDED: Check internet connection before sending request
+    final hasInternet = await ConnectivityService.hasInternet();
+    if (!mounted) return;
+
+    if (!hasInternet) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.wifi_off_rounded, color: kOrange),
+              SizedBox(width: 8),
+              Text('No Internet'),
+            ],
+          ),
+          content: const Text(
+            'Please check your internet connection and try again.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'OK',
+                style: TextStyle(color: kOrange, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      );
       return;
     }
 

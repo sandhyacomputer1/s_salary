@@ -57,8 +57,12 @@ class ApiClient {
       );
     }
 
-    final response = await _sendWithRefresh(request);
-    return _handleResponse(response);
+    try {
+      final response = await _sendWithRefresh(request);
+      return _handleResponse(response);
+    } catch (e) {
+      throw Exception(_friendlyError(e)); // 👈 Added friendly error
+    }
   }
 
   // ============================
@@ -77,8 +81,12 @@ class ApiClient {
       );
     }
 
-    final response = await _sendWithRefresh(request);
-    return _handleResponse(response);
+    try {
+      final response = await _sendWithRefresh(request);
+      return _handleResponse(response);
+    } catch (e) {
+      throw Exception(_friendlyError(e)); // 👈 Added friendly error
+    }
   }
 
   // ============================
@@ -97,8 +105,12 @@ class ApiClient {
       );
     }
 
-    final response = await _sendWithRefresh(request);
-    return _handleResponse(response);
+    try {
+      final response = await _sendWithRefresh(request);
+      return _handleResponse(response);
+    } catch (e) {
+      throw Exception(_friendlyError(e)); // 👈 Added friendly error
+    }
   }
 
   // ============================
@@ -113,8 +125,12 @@ class ApiClient {
       );
     }
 
-    final response = await _sendWithRefresh(request);
-    return _handleResponse(response);
+    try {
+      final response = await _sendWithRefresh(request);
+      return _handleResponse(response);
+    } catch (e) {
+      throw Exception(_friendlyError(e)); // 👈 Added friendly error
+    }
   }
 
   // ============================================================
@@ -136,9 +152,11 @@ class ApiClient {
     // First request
     final response = await request(accessToken);
 
-    // Token still valid
-    if (response.statusCode != 401) return response;
-
+    // 👇 CHANGE THIS LINE
+    // If the server returns 401 (Unauthorized) OR 403 (Forbidden), try to refresh
+    if (response.statusCode != 401 && response.statusCode != 403) {
+      return response;
+    }
     // ----------------------------------------------------------
     // ACCESS TOKEN EXPIRED
     // ----------------------------------------------------------
@@ -327,5 +345,19 @@ class ApiClient {
     } catch (_) {
       throw Exception('Server returned an invalid response.');
     }
+  }
+
+  // ============================================================
+  // FRIENDLY ERROR HELPER (Added to catch sudden disconnects)
+  // ============================================================
+  String _friendlyError(Object e) {
+    final msg = e.toString().toLowerCase();
+    if (msg.contains('socket') ||
+        msg.contains('network') ||
+        msg.contains('timeout') ||
+        msg.contains('failed host lookup')) {
+      return 'No internet connection. Please check your network and try again.';
+    }
+    return e.toString().replaceFirst('Exception: ', '');
   }
 }

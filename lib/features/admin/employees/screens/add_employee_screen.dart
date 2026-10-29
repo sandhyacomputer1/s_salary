@@ -847,38 +847,45 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
   // BUILD
   // ==========================================================
 
+  // ==========================================================
+  // BUILD
+  // ==========================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          _buildPageHeader(),
-          Expanded(
-            child: Form(
-              key: _formKey,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(28, 22, 28, 22),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1400),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildAccountSection(),
-                        _buildJobSection(),
-                        _buildWorkModeSection(),
-                        _buildPersonalSection(),
-                        _buildBankSection(),
-                        _buildActionButtons(),
-                      ],
+      body: SafeArea( // 👈 ADDED: Prevents the header from overlapping the phone's status bar
+        bottom: false,
+        child: Column(
+          children: [
+            _buildPageHeader(),
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(28, 22, 28, 22),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1400),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildAccountSection(),
+                          _buildJobSection(),
+                          _buildWorkModeSection(),
+                          _buildPersonalSection(),
+                          _buildBankSection(),
+                          _buildActionButtons(),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -890,7 +897,8 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
   Widget _buildPageHeader() {
     return Container(
       width: double.infinity,
-      height: 62,
+      // 👇 Increased height slightly to give the text room to breathe
+      height: 68,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -898,7 +906,8 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        // 👇 Reduced left/right padding on mobile so text has more room
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           children: [
             IconButton(
@@ -910,11 +919,13 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
               },
               icon: const Icon(
                 Icons.arrow_back_rounded,
-                size: 21,
+                size: 22,
                 color: textDark,
               ),
             ),
-            const SizedBox(width: 4),
+            // Removed SizedBox(width: 4) to save space
+
+            // 👇 The Icon box
             Container(
               width: 36,
               height: 36,
@@ -928,7 +939,9 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                 size: 19,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
+
+            // 👇 Title & Subtitle Column
             const Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -939,54 +952,31 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 18, // Slightly smaller to fit mobile
                       fontWeight: FontWeight.w700,
                       color: textDark,
+                      letterSpacing: -0.3,
                     ),
                   ),
-                  SizedBox(height: 1),
+                  SizedBox(height: 2),
                   Text(
                     'Create an employee profile and assign work details.',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12, // Slightly smaller to fit mobile
                       color: textLight,
                     ),
                   ),
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 6,
-              ),
-              decoration: BoxDecoration(
-                color: pageBackground,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: border),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.admin_panel_settings_outlined,
-                    size: 15,
-                    color: textMedium,
-                  ),
-                  SizedBox(width: 6),
-                  Text(
-                    'Admin',
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: textMedium,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+
+            // 👇 The "Admin" text container is REMOVED from here.
+            // By removing it, the title now has the full width of the screen.
+
+            // Optional: Add a tiny bit of trailing padding so text doesn't touch the edge
+            const SizedBox(width: 8),
           ],
         ),
       ),
