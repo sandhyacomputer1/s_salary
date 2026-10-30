@@ -10,7 +10,7 @@ import '../../attendance_notifications/widgets/check_in_out_notifications_screen
 import '../../audit_trail/screens/audit_trail_screen.dart';
 import '../../branches/screens/branches_screen.dart';
 import '../../departments/screens/department_screen.dart';
-import '../../employees/screens/employees_screen.dart';
+import '../../employees/screens/admin_employees_screen.dart';
 import '../../expenses/screens/expense_screen.dart';
 import '../../field_tracking/screens/field_tracking_screen.dart';
 import '../../payroll/screens/payroll_screen.dart';
@@ -473,7 +473,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
   Widget _buildBodyContent() {
-    if (_selectedScreenIndex == 1) return const EmployeesScreen(embedded: true);
+    if (_selectedScreenIndex == 1) return const AdminEmployeesScreen(embedded: true);
     if (_selectedScreenIndex == 2) return const CalendarScreen(embedded: true);
     if (_selectedScreenIndex == 3) return const LeaveScreen(embedded: true);
     if (_selectedScreenIndex == 4) return const ShiftRosterScreen(embedded: true); // Add this
