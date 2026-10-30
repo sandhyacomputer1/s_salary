@@ -19,6 +19,7 @@ class AuthService {
         '${ApiConstants.baseUrl}/auth/login',
       ),
       headers: {
+
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
