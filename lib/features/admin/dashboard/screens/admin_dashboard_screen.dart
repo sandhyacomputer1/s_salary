@@ -10,6 +10,7 @@ import '../../attendance_notifications/widgets/check_in_out_notifications_screen
 import '../../audit_trail/screens/audit_trail_screen.dart';
 import '../../branches/screens/branches_screen.dart';
 import '../../departments/screens/department_screen.dart';
+import '../../employees/models/admin_employee_model.dart';
 import '../../employees/screens/admin_employees_screen.dart';
 import '../../expenses/screens/expense_screen.dart';
 import '../../field_tracking/screens/field_tracking_screen.dart';
@@ -17,8 +18,6 @@ import '../../payroll/screens/payroll_screen.dart';
 import '../../reports/widgets/reports_main_screen.dart';
 import '../../settings/screens/settings_screen.dart';
 import '../../shift_roster/screens/shift_roster_screen.dart';
-import '../../employees/screens/add_employee_screen.dart';
-import '../../employees/screens/employee_details_screen.dart';
 import '../../calendar/screens/calendar_screen.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../leaves/screens/leave_screen.dart';
@@ -28,6 +27,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../widgets/admin_notifications_panel/admin_notifications_panel.dart';
+import 'admin_overview_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -36,8 +36,7 @@ class AdminDashboardScreen extends StatefulWidget {
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
 }
 
-class _AdminDashboardScreenState extends State<AdminDashboardScreen>
-    with SingleTickerProviderStateMixin {
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   // ==========================================================
   // BREAKPOINTS & COLORS
@@ -73,12 +72,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   static const bool _askNotificationPermission = true;
   static const bool _askLocationPermission = false; // turn on if admin uses GPS
   static const bool _askCameraPermission = false; // turn on if admin takes photos
-  List<Employee> _employees = [];
-  List<Employee> _archivedEmployees = [];
+
+  // Numbers for the bell badge. (The overview screen loads its own data.)
   int _pendingLeaves = 0;
   int _pendingExpenses = 0;
-  LicenseInfo? _license; // NEW: data for the "Software Expiry Details" card
-
+  LicenseInfo? _license; // data for the "Software Expiry Details" card
 
   // ==========================================================
   // STATE
@@ -86,33 +84,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   bool _isLoading = true;
   bool _isRefreshing = false;
-  String? _errorMessage;
 
   // SIDEBAR & NAVIGATION STATE
   bool _isSidebarCollapsed = false;
   int _selectedScreenIndex = 0;
+
+  /// Changing this value rebuilds the Overview screen (reloads its data).
+  int _overviewReload = 0;
+
+  /// Changing this value rebuilds the Employees screen, so clicking
+  /// "Employees" in the sidebar always shows the list (not an open profile).
+  int _employeesResetKey = 0;
+
+  /// Employee profile that the Employees screen should open directly
+  /// (set when the person icon is tapped on the Overview).
+  AdminEmployeeModel? _pendingProfile;
 
   // CLOCK
   Timer? _clockTimer;
   String _currentDate = '';
   String _currentTime = '';
 
-  late final AnimationController _entranceController;
-
   @override
   void initState() {
     super.initState();
-    _entranceController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
     _updateDateTime();
     _clockTimer = Timer.periodic(
       const Duration(seconds: 30),
           (_) => _updateDateTime(),
     );
     _loadDashboardData();
-    _loadLicense(); // NEW
+    _loadLicense();
 
     // Ask for permissions as soon as the dashboard is on screen.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -123,7 +125,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void dispose() {
     _clockTimer?.cancel();
-    _entranceController.dispose();
     super.dispose();
   }
 
@@ -232,17 +233,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       if (open == true) await openAppSettings();
     }
   }
+
+  /// Loads the numbers for the notification bell (pending leaves / expenses).
   Future<void> _loadDashboardData() async {
     if (!mounted) return;
-    setState(() { _isLoading = true; _errorMessage = null; });
+    setState(() => _isLoading = true);
 
     try {
       final employeeResults = await Future.wait([
         _employeeService.getEmployees(status: 'active'),
-        _employeeService.getArchivedEmployees(),
       ]);
       final activeEmployees = employeeResults[0] as List<Employee>;
-      final archivedEmployees = employeeResults[1] as List<Employee>;
 
       int pendingLeaveCount = 0;
       if (activeEmployees.isNotEmpty) {
@@ -266,30 +267,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
       if (!mounted) return;
       setState(() {
-        _employees = activeEmployees;
-        _archivedEmployees = archivedEmployees;
         _pendingLeaves = pendingLeaveCount;
         _pendingExpenses = pendingExpenseCount;
         _isLoading = false;
         _isRefreshing = false;
       });
-      _entranceController.forward(from: 0);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _isRefreshing = false;
-        _errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
     }
   }
 
   Future<void> _refreshDashboard() async {
     if (_isRefreshing) return;
-    setState(() => _isRefreshing = true);
-    _loadLicense(); // NEW
+    setState(() {
+      _isRefreshing = true;
+      _overviewReload++; // reload the Overview screen too
+    });
+    _loadLicense();
     await _loadDashboardData();
   }
+
   /// Loads the licence data (start date, valid until, duration).
   Future<void> _loadLicense() async {
     final info = await LicenseInfo.fetch();
@@ -312,21 +313,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       pendingLeaves: _pendingLeaves,
       pendingExpenses: _pendingExpenses,
       // "View all notifications" -> the check-in / check-out notifications screen
-      onViewAll: () => setState(() => _selectedScreenIndex = 8),
+      onViewAll: () => _goTo(8),
       // tapping the pending cards opens Leaves / Expenses
-      onOpenLeaves: () => setState(() => _selectedScreenIndex = 3),
-      onOpenExpenses: () => setState(() => _selectedScreenIndex = 7),
+      onOpenLeaves: () => _goTo(3),
+      onOpenExpenses: () => _goTo(7),
     );
   }
-  void _onNavigationSelected(int index) {
-    if (_isMobile) Navigator.pop(context); // Close drawer on mobile
-    setState(() => _selectedScreenIndex = index);
+
+  /// Switches the screen WITHOUT touching the drawer.
+  void _goTo(int index) {
+    setState(() {
+      if (index == 1) {
+        _pendingProfile = null; // sidebar "Employees" always shows the list
+        _employeesResetKey++;
+      }
+      _selectedScreenIndex = index;
+    });
   }
 
-  /// Opens a full page from the sidebar (closes the drawer first on phone).
-  void _pushScreen(Widget screen) {
-    if (_isMobile) Navigator.pop(context);
-    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  /// Sidebar tap: closes the drawer on phones, then switches.
+  void _onNavigationSelected(int index) {
+    if (_isMobile) Navigator.pop(context); // Close drawer on mobile
+    _goTo(index);
+  }
+
+  /// Person icon on the Overview -> Employees screen with this profile open.
+  void _openProfileFromOverview(AdminEmployeeModel employee) {
+    setState(() {
+      _pendingProfile = employee;
+      _employeesResetKey++;
+      _selectedScreenIndex = 1;
+    });
   }
 
   // ==========================================================
@@ -468,28 +485,64 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             backgroundColor: const Color(0xFFE53935),
             child: const Icon(Icons.notifications_none_rounded),
           ),
-        ),        const SizedBox(width: 10),
+        ),
+        const SizedBox(width: 10),
       ],
     );
   }
+
+  Widget _buildDateTimeChip({bool compact = false}) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: compact ? 11 : 13, vertical: compact ? 8 : 9),
+      decoration: BoxDecoration(color: compact ? Colors.white : _pageBg, borderRadius: BorderRadius.circular(9), border: Border.all(color: _border)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.calendar_today_outlined, size: 15, color: Color(0xFF6B7280)),
+          const SizedBox(width: 7),
+          Flexible(child: Text(_currentDate, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF374151)))),
+          const SizedBox(width: 12),
+          const Icon(Icons.access_time_outlined, size: 15, color: _primary),
+          const SizedBox(width: 6),
+          Text(_currentTime, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _primary)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBodyContent() {
-    if (_selectedScreenIndex == 1) return const AdminEmployeesScreen(embedded: true);
+    if (_selectedScreenIndex == 1) {
+      return AdminEmployeesScreen(
+        key: ValueKey('employees-$_employeesResetKey'),
+        embedded: true,
+        initialProfile: _pendingProfile,
+      );
+    }
     if (_selectedScreenIndex == 2) return const CalendarScreen(embedded: true);
     if (_selectedScreenIndex == 3) return const LeaveScreen(embedded: true);
-    if (_selectedScreenIndex == 4) return const ShiftRosterScreen(embedded: true); // Add this
-    if (_selectedScreenIndex == 5) return const FieldTrackingScreen(embedded: true); // Add this
-    if (_selectedScreenIndex == 6) return const DepartmentScreen(embedded: true); // Add this
-    if (_selectedScreenIndex == 7) return const ExpenseScreen(embedded: true); // Add this
+    if (_selectedScreenIndex == 4) return const ShiftRosterScreen(embedded: true);
+    if (_selectedScreenIndex == 5) return const FieldTrackingScreen(embedded: true);
+    if (_selectedScreenIndex == 6) return const DepartmentScreen(embedded: true);
+    if (_selectedScreenIndex == 7) return const ExpenseScreen(embedded: true);
     if (_selectedScreenIndex == 8) return const CheckInOutNotificationsScreen(embedded: true);
     if (_selectedScreenIndex == 9) return const AuditTrailScreen(embedded: true);
-    if (_selectedScreenIndex == 10) return const PayrollScreen(embedded: true); // Add this
+    if (_selectedScreenIndex == 10) return const PayrollScreen(embedded: true);
     if (_selectedScreenIndex == 11) return const BranchesScreen(embedded: true);
     if (_selectedScreenIndex == 12) return const TeamRolesScreen(embedded: true);
-    if (_selectedScreenIndex == 13) return const SettingsScreen(embedded: true); // Add this
+    if (_selectedScreenIndex == 13) return const SettingsScreen(embedded: true);
     if (_selectedScreenIndex == 14) return const ReportsMainScreen();
 
-    return _buildOverviewDashboard();
+    // Overview (matches the web dashboard)
+    return AdminOverviewScreen(
+      key: ValueKey('overview-$_overviewReload'),
+      onViewAllEmployees: () => _goTo(1),
+      onViewAllLeaves: () => _goTo(3),
+      onViewAllExpenses: () => _goTo(7),
+      onOpenProfile: _openProfileFromOverview,
+      onDataChanged: _loadDashboardData, // keeps the bell badge up to date
+    );
   }
+
   // ==========================================================
   // SIDEBAR
   // ==========================================================
@@ -509,32 +562,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         _SideItem(
             Icons.people_outline,
             'Employees',
-                () => _onNavigationSelected(1), // Changed from _openEmployeesFromDrawer to _onNavigationSelected(1)
+                () => _onNavigationSelected(1),
             selectedIndex: 1
         ),
 
         _SideItem(
             Icons.calendar_month_outlined,
             'Calendar',
-                () => _onNavigationSelected(2), // Changed from _pushScreen
+                () => _onNavigationSelected(2),
             selectedIndex: 2
         ),
 
         _SideItem(
             Icons.schedule_outlined,
             'Shift Roster',
-                () => _onNavigationSelected(4), // Changed from _pushScreen
+                () => _onNavigationSelected(4),
             selectedIndex: 4
         ),
 
         _SideItem(
             Icons.location_on_outlined,
             'Field Tracking',
-                () => _onNavigationSelected(5), // Changed from _pushScreen
+                () => _onNavigationSelected(5),
             selectedIndex: 5
         ),
 
-        // ✅ CHANGED THIS LINE:
         _SideItem(Icons.event_available_outlined,
             'Leaves',
                 () => _onNavigationSelected(3),
@@ -554,23 +606,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             'Reports & Matrix', () => _onNavigationSelected(14),
             selectedIndex: 14
         ),
-
-
-
       ]),
       _SideSection('FINANCE', [
 
         _SideItem(
             Icons.payments_outlined,
             'Payroll & Salary',
-                () => _onNavigationSelected(10), // Changed from _pushScreen
+                () => _onNavigationSelected(10),
             selectedIndex: 10
         ),
 
         _SideItem(
             Icons.receipt_long_outlined,
             'Expenses',
-                () => _onNavigationSelected(7), // Changed from _pushScreen
+                () => _onNavigationSelected(7),
             selectedIndex: 7
         ),
       ]),
@@ -580,21 +629,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         _SideItem(
             Icons.business_outlined,
             'Branches',
-                () => _onNavigationSelected(11), // Was _pushScreen
+                () => _onNavigationSelected(11),
             selectedIndex: 11
         ),
 
         _SideItem(
             Icons.admin_panel_settings_outlined,
             'Team & Roles',
-                () => _onNavigationSelected(12), // Was _pushScreen
+                () => _onNavigationSelected(12),
             selectedIndex: 12
         ),
 
         _SideItem(
             Icons.settings_outlined,
             'Settings',
-                () => _onNavigationSelected(13), // Changed from _pushScreen
+                () => _onNavigationSelected(13),
             selectedIndex: 13
         ),
 
@@ -605,6 +654,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       ]),
     ];
   }
+
   Widget _buildSidebar({required bool isMobileDrawer}) {
     // The layout is chosen from the REAL width, so nothing overflows while
     // the sidebar animates between open and collapsed.
@@ -918,652 +968,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ==========================================================
-  // OVERVIEW DASHBOARD CONTENT
+  // ACTIONS
   // ==========================================================
-
-  Widget _buildOverviewDashboard() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_errorMessage != null) return _buildErrorState();
-
-    final mobile = _isMobile;
-
-    return RefreshIndicator(
-      onRefresh: _refreshDashboard,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(mobile ? 14 : 22, mobile ? 16 : 22, mobile ? 14 : 22, 35),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildPageHeader(),
-            SizedBox(height: mobile ? 16 : 24),
-            _buildSummaryCards(),
-            SizedBox(height: mobile ? 18 : 28),
-            _staggeredIn(4, _buildInsightsSection(mobile)),
-            SizedBox(height: mobile ? 18 : 28),
-            _buildEmployeeSection(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPageHeader() {
-    final mobile = _isMobile;
-    final titleBlock = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Company Dashboard', style: TextStyle(fontSize: mobile ? 22 : 27, fontWeight: FontWeight.w700, color: _textDark)),
-        const SizedBox(height: 6),
-        Text('Manage your workforce and company activities.', style: TextStyle(fontSize: mobile ? 13 : 14, color: Colors.grey.shade600)),
-      ],
-    );
-
-    if (mobile) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [titleBlock, const SizedBox(height: 12), _buildDateTimeChip(compact: true)]);
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: titleBlock),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: _border)),
-          child: Row(children: [
-            const Icon(Icons.sync_rounded, size: 16, color: Color(0xFF6B7280)),
-            const SizedBox(width: 7),
-            Text('Live dashboard', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
-          ]),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDateTimeChip({bool compact = false}) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: compact ? 11 : 13, vertical: compact ? 8 : 9),
-      decoration: BoxDecoration(color: compact ? Colors.white : _pageBg, borderRadius: BorderRadius.circular(9), border: Border.all(color: _border)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.calendar_today_outlined, size: 15, color: Color(0xFF6B7280)),
-          const SizedBox(width: 7),
-          Flexible(child: Text(_currentDate, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF374151)))),
-          const SizedBox(width: 12),
-          const Icon(Icons.access_time_outlined, size: 15, color: _primary),
-          const SizedBox(width: 6),
-          Text(_currentTime, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _primary)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryCards() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final compact = width < _mobileBreakpoint;
-        final columns = width >= 1100 ? 4 : 2;
-        return GridView(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            crossAxisSpacing: compact ? 10 : 16,
-            mainAxisSpacing: compact ? 10 : 16,
-            mainAxisExtent: compact ? 84 : 104,
-          ),
-          children: [
-            _staggeredIn(0, _DashboardSummaryCard(title: 'Active Employees', value: _employees.length.toString(), icon: Icons.people_outline_rounded, accent: const Color(0xFFE96832), highlighted: true, compact: compact)),
-            _staggeredIn(1, _DashboardSummaryCard(title: 'Pending Leaves', value: _pendingLeaves.toString(), icon: Icons.event_note_outlined, accent: const Color(0xFFE8A317), compact: compact)),
-            _staggeredIn(2, _DashboardSummaryCard(title: 'Pending Expenses', value: _pendingExpenses.toString(), icon: Icons.receipt_long_outlined, accent: const Color(0xFF7A5AF8), compact: compact)),
-            _staggeredIn(3, _DashboardSummaryCard(title: 'Archived Employees', value: _archivedEmployees.length.toString(), icon: Icons.person_off_outlined, accent: const Color(0xFF64748B), compact: compact)),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildInsightsSection(bool mobile) {
-    final snapshot = _buildCardShell(
-      mobile: mobile,
-      title: 'Workforce Snapshot',
-      subtitle: 'Active employees, leaves, expenses & archive at a glance',
-      icon: Icons.insights_outlined,
-      child: _buildSnapshotChart(mobile),
-    );
-
-    final departments = _buildCardShell(
-      mobile: mobile,
-      title: 'Employees by Department',
-      subtitle: _employees.isEmpty ? 'No active employees yet' : 'Top ${_departmentBreakdown().length} departments by headcount',
-      icon: Icons.account_tree_outlined,
-      child: _buildDepartmentChart(mobile),
-    );
-
-    final quickActions = _buildQuickActions(mobile);
-
-    if (mobile) {
-      return Column(children: [snapshot, const SizedBox(height: 14), departments, const SizedBox(height: 14), quickActions]);
-    }
-
-    return Column(
-      children: [
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: snapshot),
-              const SizedBox(width: 16),
-              Expanded(child: departments),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        quickActions,
-      ],
-    );
-  }
-
-  Widget _buildCardShell({required bool mobile, required String title, required String subtitle, required IconData icon, required Widget child}) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.025), blurRadius: 10, offset: const Offset(0, 3))],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(mobile ? 14 : 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(width: 34, height: 34, decoration: BoxDecoration(color: const Color(0xFFFFEEE7), borderRadius: BorderRadius.circular(9)), child: Icon(icon, size: 18, color: _primary)),
-                const SizedBox(width: 10),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark)),
-                  const SizedBox(height: 2),
-                  Text(subtitle, style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
-                ])),
-              ],
-            ),
-            SizedBox(height: mobile ? 16 : 20),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSnapshotChart(bool mobile) {
-    final metrics = <_MetricData>[
-      _MetricData(label: 'Active Employees', value: _employees.length, icon: Icons.people_outline_rounded, color: const Color(0xFFE96832)),
-      _MetricData(label: 'Pending Leaves', value: _pendingLeaves, icon: Icons.event_note_outlined, color: const Color(0xFFE8A317)),
-      _MetricData(label: 'Pending Expenses', value: _pendingExpenses, icon: Icons.receipt_long_outlined, color: const Color(0xFF7A5AF8)),
-      _MetricData(label: 'Archived Employees', value: _archivedEmployees.length, icon: Icons.person_off_outlined, color: const Color(0xFF64748B)),
-    ];
-
-    var maxValue = 1;
-    for (final metric in metrics) {
-      if (metric.value > maxValue) maxValue = metric.value;
-    }
-
-    if (mobile) {
-      return Column(
-        children: [
-          Row(children: [Expanded(child: _buildGaugeTile(metrics[0], maxValue, mobile)), Expanded(child: _buildGaugeTile(metrics[1], maxValue, mobile))]),
-          const SizedBox(height: 20),
-          Row(children: [Expanded(child: _buildGaugeTile(metrics[2], maxValue, mobile)), Expanded(child: _buildGaugeTile(metrics[3], maxValue, mobile))]),
-        ],
-      );
-    }
-
-    return Wrap(
-      alignment: WrapAlignment.spaceEvenly,
-      runSpacing: 20,
-      children: metrics.map((metric) => SizedBox(width: 150, child: _buildGaugeTile(metric, maxValue, mobile))).toList(),
-    );
-  }
-
-  Widget _buildGaugeTile(_MetricData metric, int maxValue, bool mobile) {
-    final fraction = maxValue == 0 ? 0.0 : metric.value / maxValue;
-    final size = mobile ? 84.0 : 92.0;
-
-    return Column(
-      children: [
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: fraction.clamp(0.0, 1.0)),
-          duration: const Duration(milliseconds: 900),
-          curve: Curves.easeOutCubic,
-          builder: (context, animatedFraction, _) {
-            return SizedBox(
-              width: size,
-              height: size,
-              child: CustomPaint(
-                painter: _RingGaugePainter(fraction: animatedFraction, color: metric.color, trackColor: _pageBg, strokeWidth: 8),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(metric.icon, size: 17, color: metric.color),
-                      const SizedBox(height: 3),
-                      Text(metric.value.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _textDark)),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        Text(metric.label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
-      ],
-    );
-  }
-
-  static const List<Color> _departmentPalette = [Color(0xFFE96832), Color(0xFF2878FF), Color(0xFF18864B), Color(0xFF7A5AF8), Color(0xFFE8A317), Color(0xFFC62828)];
-
-  Widget _buildDepartmentChart(bool mobile) {
-    final breakdown = _departmentBreakdown();
-
-    if (breakdown.isEmpty) {
-      return _emptyChartPlaceholder('No department data yet — add employees to see the breakdown here.');
-    }
-
-    final total = breakdown.fold<int>(0, (sum, e) => sum + e.value);
-    final segments = <double>[];
-    final colors = <Color>[];
-
-    for (var i = 0; i < breakdown.length; i++) {
-      segments.add(breakdown[i].value.toDouble());
-      colors.add(_departmentPalette[i % _departmentPalette.length]);
-    }
-
-    final donut = TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 1000),
-      curve: Curves.easeOutCubic,
-      builder: (context, progress, _) {
-        return SizedBox(
-          width: 152,
-          height: 152,
-          child: CustomPaint(
-            painter: _DonutPainter(values: segments, colors: colors, trackColor: _pageBg, strokeWidth: 18, progress: progress),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(total.toString(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: _textDark)),
-                  Text('Employees', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    final legend = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < breakdown.length; i++)
-          Padding(
-            padding: EdgeInsets.only(bottom: i == breakdown.length - 1 ? 0 : 10),
-            child: Row(
-              children: [
-                Container(width: 9, height: 9, decoration: BoxDecoration(color: colors[i], shape: BoxShape.circle)),
-                const SizedBox(width: 9),
-                Expanded(child: Text(breakdown[i].key, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: _textDark))),
-                const SizedBox(width: 8),
-                Text('${breakdown[i].value}', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: colors[i])),
-                const SizedBox(width: 6),
-                Text('(${total == 0 ? 0 : (breakdown[i].value * 100 / total).round()}%)', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-              ],
-            ),
-          ),
-      ],
-    );
-
-    if (mobile) {
-      return Column(children: [donut, const SizedBox(height: 18), legend]);
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [donut, const SizedBox(width: 24), Expanded(child: legend)],
-    );
-  }
-
-  Widget _emptyChartPlaceholder(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 18),
-      child: Row(
-        children: [
-          Icon(Icons.info_outline_rounded, size: 18, color: Colors.grey.shade500),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text, style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickActions(bool mobile) {
-    final actions = [
-      ('Add Employee', Icons.person_add_alt_1_rounded, _openAddEmployee),
-      ('View All Employees', Icons.people_alt_outlined, _openEmployees),
-      ('Refresh Data', Icons.refresh_rounded, _isLoading ? null : _refreshDashboard),
-    ];
-
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(mobile ? 14 : 16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _border)),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: actions.map((action) {
-          final (label, icon, onTap) = action;
-          return OutlinedButton.icon(
-            onPressed: onTap,
-            icon: Icon(icon, size: 17),
-            label: Text(label),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _textDark,
-              side: const BorderSide(color: Color(0xFFD9DEE7)),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildEmployeeSection() {
-    final mobile = _isMobile;
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.025), blurRadius: 10, offset: const Offset(0, 3))],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(mobile ? 14 : 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildEmployeeSectionHeader(mobile),
-            SizedBox(height: mobile ? 14 : 20),
-            const Divider(height: 1),
-            const SizedBox(height: 4),
-            if (_employees.isEmpty)
-              _buildEmptyEmployees()
-            else if (mobile)
-              _buildEmployeeList()
-            else
-              _buildEmployeeTable(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmployeeSectionHeader(bool mobile) {
-    final titleBlock = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Active Employees', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _textDark)),
-        const SizedBox(height: 4),
-        Text('${_employees.length} active employees in your company', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-      ],
-    );
-
-    final viewAllButton = OutlinedButton.icon(
-      onPressed: _openEmployees,
-      icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-      label: const Text('View All'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF374151),
-        side: const BorderSide(color: Color(0xFFD9DEE7)),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-
-    final addButton = FilledButton.icon(
-      onPressed: _openAddEmployee,
-      icon: const Icon(Icons.person_add_alt_1_rounded, size: 17),
-      label: const Text('Add Employee'),
-      style: FilledButton.styleFrom(
-        backgroundColor: _primary,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-
-    if (mobile) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [titleBlock, const SizedBox(height: 14), Row(children: [Expanded(child: viewAllButton), const SizedBox(width: 10), Expanded(child: addButton)])],
-      );
-    }
-
-    return Row(children: [Expanded(child: titleBlock), viewAllButton, const SizedBox(width: 10), addButton]);
-  }
-
-  Widget _buildEmployeeList() {
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.zero,
-      itemCount: _employees.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFEDEFF3)),
-      itemBuilder: (context, index) {
-        final employee = _employees[index];
-        return InkWell(
-          onTap: () => _openEmployeeDetails(employee),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              children: [
-                _buildAvatar(employee.name),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(employee.name.trim().isEmpty ? 'Unnamed Employee' : employee.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1F2937))),
-                      const SizedBox(height: 3),
-                      Text('${_displayValue(employee.employeeCode)}  •  ${_displayValue(employee.department)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF4B5563))),
-                      const SizedBox(height: 2),
-                      Text(_displayValue(employee.phone), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Color(0xFF7A8494))),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _StatusBadge(status: employee.status),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildAvatar(String name) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
-      child: Center(child: Text(_initials(name), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF475569)))),
-    );
-  }
-
-  Widget _buildEmployeeTable() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth < 850 ? 850 : constraints.maxWidth),
-            child: DataTable(
-              showCheckboxColumn: false,
-              headingRowHeight: 48,
-              dataRowMinHeight: 68,
-              dataRowMaxHeight: 72,
-              horizontalMargin: 8,
-              columnSpacing: 28,
-              dividerThickness: 0.6,
-              headingTextStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF7B8493), letterSpacing: 0.4),
-              columns: const [
-                DataColumn(label: Text('EMPLOYEE')),
-                DataColumn(label: Text('CODE')),
-                DataColumn(label: Text('DEPARTMENT')),
-                DataColumn(label: Text('MOBILE')),
-                DataColumn(label: Text('STATUS')),
-              ],
-              rows: _employees.map((employee) {
-                return DataRow(
-                  onSelectChanged: (_) => _openEmployeeDetails(employee),
-                  cells: [
-                    DataCell(
-                      SizedBox(
-                        width: 210,
-                        child: Row(
-                          children: [
-                            Container(width: 38, height: 38, decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(9)), child: Center(child: Text(_initials(employee.name), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF475569))))),
-                            const SizedBox(width: 11),
-                            Expanded(child: Text(employee.name.trim().isEmpty ? 'Unnamed Employee' : employee.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1F2937)))),
-                          ],
-                        ),
-                      ),
-                    ),
-                    DataCell(Text(_displayValue(employee.employeeCode), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151)))),
-                    DataCell(Text(_displayValue(employee.department), style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)))),
-                    DataCell(Text(_displayValue(employee.phone), style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)))),
-                    DataCell(_StatusBadge(status: employee.status)),
-                  ],
-                );
-              }).toList(),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildEmptyEmployees() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 55),
-      child: Column(
-        children: [
-          Container(width: 64, height: 64, decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.people_outline_rounded, size: 32, color: Color(0xFF94A3B8))),
-          const SizedBox(height: 14),
-          const Text('No active employees', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text('Add your first employee to get started.', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-          const SizedBox(height: 18),
-          FilledButton.icon(onPressed: _openAddEmployee, icon: const Icon(Icons.person_add_alt_1_rounded, size: 17), label: const Text('Add Employee'), style: FilledButton.styleFrom(backgroundColor: _primary)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorState() {
-    return Center(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 500),
-        margin: const EdgeInsets.all(24),
-        padding: const EdgeInsets.all(30),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 62, height: 62, decoration: BoxDecoration(color: const Color(0xFFFFF1F1), borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.error_outline_rounded, size: 32, color: Color(0xFFDC2626))),
-            const SizedBox(height: 16),
-            const Text('Unable to load dashboard', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Text(_errorMessage ?? 'Something went wrong.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-            const SizedBox(height: 20),
-            FilledButton.icon(onPressed: _loadDashboardData, icon: const Icon(Icons.refresh_rounded), label: const Text('Try Again'), style: FilledButton.styleFrom(backgroundColor: _primary)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ==========================================================
-  // HELPERS & ACTIONS
-  // ==========================================================
-
-  Future<void> _openEmployeesFromDrawer() async {
-    if (_isMobile) Navigator.pop(context);
-    await _openEmployees();
-  }
-
-  Future<void> _openEmployees() async {
-    await Navigator.pushNamed(context, AppRoutes.employees);
-    await _loadDashboardData();
-  }
-
-  Future<void> _openEmployeeDetails(Employee employee) async {
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => EmployeeDetailsScreen(employee: employee)));
-    await _loadDashboardData();
-  }
-
-  Future<void> _openAddEmployee() async {
-    final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddEmployeeScreen()));
-    if (result == true) await _loadDashboardData();
-
-  }
 
   Future<void> _logout() async {
     if (_isMobile) Navigator.pop(context);
     await SecureStorage.clearSession();
     if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
-  }
-
-  String _displayValue(String value) => value.trim().isEmpty ? '—' : value;
-
-  String _initials(String name) {
-    final clean = name.trim();
-    if (clean.isEmpty) return '?';
-    final parts = clean.split(RegExp(r'\s+'));
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-
-  List<MapEntry<String, int>> _departmentBreakdown() {
-    final counts = <String, int>{};
-    for (final employee in _employees) {
-      final department = employee.department.trim();
-      final key = department.isEmpty ? 'Unassigned' : department;
-      counts[key] = (counts[key] ?? 0) + 1;
-    }
-    final entries = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    return entries.take(6).toList();
-  }
-
-  Widget _staggeredIn(int index, Widget child) {
-    final start = (index * 0.12).clamp(0.0, 0.7);
-    final animation = CurvedAnimation(parent: _entranceController, curve: Interval(start, (start + 0.4).clamp(0.0, 1.0), curve: Curves.easeOutCubic));
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, builtChild) => Opacity(opacity: animation.value.clamp(0.0, 1.0), child: Transform.translate(offset: Offset(0, (1 - animation.value) * 16), child: builtChild)),
-      child: child,
-    );
   }
 }
 
@@ -1587,157 +999,4 @@ class _SideItem {
   final int? selectedIndex;
 
   const _SideItem(this.icon, this.title, this.onTap, {this.selectedIndex});
-}
-
-// =================================================================
-// HELPER CLASSES
-// =================================================================
-
-class _DashboardSummaryCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color accent;
-  final bool highlighted;
-  final bool compact;
-
-  const _DashboardSummaryCard({required this.title, required this.value, required this.icon, required this.accent, this.highlighted = false, this.compact = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final iconBox = compact ? 38.0 : 48.0;
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.025), blurRadius: 10, offset: const Offset(0, 3))],
-      ),
-      child: Stack(
-        children: [
-          if (highlighted)
-            Positioned(left: 0, top: 0, bottom: 0, width: 4, child: Container(decoration: const BoxDecoration(color: Color(0xFFE96832), borderRadius: BorderRadius.only(topLeft: Radius.circular(13), bottomLeft: Radius.circular(13))))),
-          Positioned.fill(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(width: iconBox, height: iconBox, decoration: BoxDecoration(color: accent.withOpacity(0.10), borderRadius: BorderRadius.circular(compact ? 10 : 12)), child: Icon(icon, size: compact ? 20 : 24, color: accent)),
-                  SizedBox(width: compact ? 10 : 14),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(value, style: TextStyle(fontSize: compact ? 21 : 25, fontWeight: FontWeight.w700, height: 1.1, color: const Color(0xFF18212F))),
-                        SizedBox(height: compact ? 2 : 3),
-                        Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: compact ? 11.5 : 12, height: 1.2, fontWeight: FontWeight.w500, color: const Color(0xFF7A8494))),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final String status;
-  const _StatusBadge({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final normalized = status.trim().toLowerCase();
-    final isActive = normalized == 'active';
-    final label = status.trim().isEmpty ? 'N/A' : status;
-    final background = isActive ? const Color(0xFFE9F8EF) : const Color(0xFFFDECEC);
-    final foreground = isActive ? const Color(0xFF18864B) : const Color(0xFFC62828);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 6, height: 6, decoration: BoxDecoration(color: foreground, shape: BoxShape.circle)),
-          const SizedBox(width: 6),
-          Text(label[0].toUpperCase() + label.substring(1), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: foreground)),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricData {
-  final String label;
-  final int value;
-  final IconData icon;
-  final Color color;
-  const _MetricData({required this.label, required this.value, required this.icon, required this.color});
-}
-
-class _RingGaugePainter extends CustomPainter {
-  final double fraction;
-  final Color color;
-  final Color trackColor;
-  final double strokeWidth;
-  _RingGaugePainter({required this.fraction, required this.color, required this.trackColor, required this.strokeWidth});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = (size.shortestSide - strokeWidth) / 2;
-    final trackPaint = Paint()..color = trackColor..style = PaintingStyle.stroke..strokeWidth = strokeWidth;
-    canvas.drawCircle(center, radius, trackPaint);
-    if (fraction <= 0) return;
-    final progressPaint = Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = strokeWidth..strokeCap = StrokeCap.round;
-    const startAngle = -3.14159265 / 2;
-    final sweepAngle = 2 * 3.14159265 * fraction.clamp(0.0, 1.0);
-    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), startAngle, sweepAngle, false, progressPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _RingGaugePainter oldDelegate) => oldDelegate.fraction != fraction || oldDelegate.color != color || oldDelegate.trackColor != trackColor || oldDelegate.strokeWidth != strokeWidth;
-}
-
-class _DonutPainter extends CustomPainter {
-  final List<double> values;
-  final List<Color> colors;
-  final Color trackColor;
-  final double strokeWidth;
-  final double progress;
-  _DonutPainter({required this.values, required this.colors, required this.trackColor, required this.strokeWidth, required this.progress});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = (size.shortestSide - strokeWidth) / 2;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-    const twoPi = 2 * 3.14159265;
-    const startAngle = -3.14159265 / 2;
-    final trackPaint = Paint()..color = trackColor..style = PaintingStyle.stroke..strokeWidth = strokeWidth;
-    canvas.drawCircle(center, radius, trackPaint);
-    final total = values.fold<double>(0, (sum, v) => sum + v);
-    if (total <= 0 || progress <= 0) return;
-    final revealedSweep = twoPi * progress.clamp(0.0, 1.0);
-    var cursor = 0.0;
-    for (var i = 0; i < values.length; i++) {
-      final segmentSweep = twoPi * (values[i] / total);
-      final drawSweep = (revealedSweep - cursor).clamp(0.0, segmentSweep);
-      if (drawSweep > 0) {
-        final segmentPaint = Paint()..color = colors[i % colors.length]..style = PaintingStyle.stroke..strokeWidth = strokeWidth..strokeCap = StrokeCap.butt;
-        canvas.drawArc(rect, startAngle + cursor, drawSweep, false, segmentPaint);
-      }
-      cursor += segmentSweep;
-      if (cursor >= revealedSweep) break;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DonutPainter oldDelegate) => oldDelegate.progress != progress || oldDelegate.values != values || oldDelegate.colors != colors || oldDelegate.trackColor != trackColor || oldDelegate.strokeWidth != strokeWidth;
 }

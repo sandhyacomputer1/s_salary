@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/storage/secure_storage.dart'; // TODO: fix path if different
 import '../models/admin_employee_model.dart';
+import 'admin_employee_profile_screen.dart';
 import '../services/admin_csv_download.dart';
 import '../services/admin_employee_csv_service.dart';
 import '../services/admin_employee_service.dart';
@@ -18,7 +19,15 @@ import '../widgets/admin_salary_dialog.dart';
 /// Use `embedded: true` when it is shown inside the dashboard shell.
 class AdminEmployeesScreen extends StatefulWidget {
   final bool embedded;
-  const AdminEmployeesScreen({super.key, this.embedded = false});
+
+  /// Opens this employee's profile right away (used by the dashboard overview).
+  final AdminEmployeeModel? initialProfile;
+
+  const AdminEmployeesScreen({
+    super.key,
+    this.embedded = false,
+    this.initialProfile,
+  });
 
   @override
   State<AdminEmployeesScreen> createState() => _AdminEmployeesScreenState();
@@ -36,9 +45,13 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
   List<String> _departments = AdminEmployeeService.fallbackDepartments;
   String _companyId = '';
 
+  /// Profile shown inside this screen (so the dashboard sidebar stays visible).
+  AdminEmployeeModel? _profile;
+
   @override
   void initState() {
     super.initState();
+    _profile = widget.initialProfile;
     _load();
   }
 
@@ -244,7 +257,20 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
   }
 
   // Next steps (not built yet).
-  void _comingSoon(AdminEmployeeModel e) => _toast('Coming in the next step');
+  Future<void> _openProfile(AdminEmployeeModel e) async {
+    if (widget.embedded) {
+      // stay inside the dashboard: sidebar + top bar remain visible
+      setState(() => _profile = e);
+      return;
+    }
+    await AdminEmployeeProfileScreen.open(context, e);
+    if (mounted) _load(silent: true);
+  }
+
+  void _closeProfile() {
+    setState(() => _profile = null);
+    _load(silent: true);
+  }
 
   // ------------------------------------------------------------
   // build
@@ -252,6 +278,23 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final profile = _profile;
+    if (profile != null) {
+      // phone / browser back button returns to the list, not out of the dashboard
+      return PopScope(
+        canPop: false,
+        onPopInvoked: (didPop) {
+          if (!didPop) _closeProfile();
+        },
+        child: AdminEmployeeProfileScreen(
+          key: ValueKey(profile.id),
+          employee: profile,
+          embedded: true,
+          onBack: _closeProfile,
+        ),
+      );
+    }
+
     final body = Container(
       color: AdminEmpColors.bg,
       child: RefreshIndicator(
@@ -414,7 +457,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
             archived: archived,
             onAccess: _openAccess,
             onSalary: _openSalary,
-            onProfile: _comingSoon,
+            onProfile: _openProfile,
             onArchive: _archive,
             onRestore: _restore,
             onDeleteForever: _deleteForever,
@@ -431,7 +474,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
                   archived: archived,
                   onAccess: () => _openAccess(e),
                   onSalary: () => _openSalary(e),
-                  onProfile: () => _comingSoon(e),
+                  onProfile: () => _openProfile(e),
                   onArchive: () => _archive(e),
                   onRestore: () => _restore(e),
                   onDeleteForever: () => _deleteForever(e),
