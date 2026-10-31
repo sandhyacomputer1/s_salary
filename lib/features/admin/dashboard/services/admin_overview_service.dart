@@ -44,4 +44,10 @@ class AdminOverviewService {
         .map(AdminPendingExpense.fromJson)
         .toList();
   }
+
+  /// Attendance of every employee for one day ([dateKey] = yyyy-MM-dd).
+  Future<List<AdminDailyAttendance>> getDailyAttendance(String companyId, String dateKey) async {
+    final res = await _api.get('/attendance/company/$companyId/today?date=$dateKey');
+    return _list(res, ['attendance', 'records', 'employees']).map(AdminDailyAttendance.fromJson).toList();
+  }
 }

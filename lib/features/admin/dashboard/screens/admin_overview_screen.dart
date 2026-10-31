@@ -14,6 +14,7 @@ import '../../employees/widgets/admin_employee_theme.dart';
 import '../../employees/widgets/admin_salary_dialog.dart';
 import '../models/admin_overview_models.dart';
 import '../services/admin_overview_service.dart';
+import '../widgets/admin_daily_attendance_card.dart';
 import '../widgets/admin_overview_pending_card.dart';
 import '../widgets/admin_overview_stat_cards.dart';
 
@@ -282,6 +283,13 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
                 pendingLeaves: _leaves.length,
                 pendingExpenses: _expenses.length,
                 archived: _archived.length,
+              ),
+              const SizedBox(height: 24),
+              // daily check-in / check-out list (change the day to change the list)
+              AdminDailyAttendanceCard(
+                employees: _active,
+                companyId: _companyId,
+                service: _ov,
               ),
               const SizedBox(height: 24),
               _employeesCard(),

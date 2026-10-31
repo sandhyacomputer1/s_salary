@@ -78,3 +78,47 @@ class AdminPendingExpense {
     expenseDate: _dt(j['expenseDate']),
   );
 }
+
+DateTime? _timeOf(dynamic v) {
+  if (v is Map) return _dt(v['time']);
+  return _dt(v);
+}
+
+/// One employee's attendance for a day
+/// (GET /attendance/company/:companyId/today?date=YYYY-MM-DD).
+class AdminDailyAttendance {
+  final String employeeId;
+  final String employeeName;
+  final DateTime? checkIn;
+  final DateTime? checkOut;
+  final String status;
+  final bool isLate;
+  final double? totalHours;
+
+  const AdminDailyAttendance({
+    required this.employeeId,
+    required this.employeeName,
+    this.checkIn,
+    this.checkOut,
+    this.status = '',
+    this.isLate = false,
+    this.totalHours,
+  });
+
+  /// Accepts a flat attendance document (employeeId populated or not) or
+  /// a wrapper like { employee: {...}, attendance: {...} }.
+  factory AdminDailyAttendance.fromJson(Map<String, dynamic> j) {
+    final att = j['attendance'] is Map ? Map<String, dynamic>.from(j['attendance'] as Map) : j;
+    final emp = j['employee'] ?? att['employeeId'] ?? j['employeeId'];
+
+    return AdminDailyAttendance(
+      employeeId: _refId(emp),
+      employeeName: _refName(emp).isNotEmpty ? _refName(emp) : _s(j['name']),
+      checkIn: _timeOf(att['checkIn']),
+      checkOut: _timeOf(att['checkOut']),
+      status: _s(att['status']),
+      isLate: att['isLate'] == true,
+      totalHours: att['totalHours'] == null ? null : _d(att['totalHours']),
+    );
+  }
+}
