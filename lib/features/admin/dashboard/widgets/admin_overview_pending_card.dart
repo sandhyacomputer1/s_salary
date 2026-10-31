@@ -37,12 +37,16 @@ class AdminOverviewPendingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.of(context).size.width < 600;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
+      padding: compact
+          ? const EdgeInsets.fromLTRB(14, 14, 14, 8)
+          : const EdgeInsets.fromLTRB(24, 22, 24, 22),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(compact ? 12 : 14),
         border: Border.all(color: const Color(0xFFEDEFF3)),
         boxShadow: const [
           BoxShadow(color: Color(0x0A000000), blurRadius: 12, offset: Offset(0, 3)),
@@ -56,8 +60,10 @@ class AdminOverviewPendingCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   '$title ($count)',
-                  style: const TextStyle(
-                    fontSize: 18,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: compact ? 16 : 18,
                     fontWeight: FontWeight.w700,
                     color: AdminEmpColors.text,
                   ),
@@ -66,31 +72,34 @@ class AdminOverviewPendingCard extends StatelessWidget {
               OutlinedButton(
                 onPressed: onViewAll,
                 style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 46),
+                  minimumSize: Size(0, compact ? 36 : 46),
                   foregroundColor: AdminEmpColors.text,
                   side: const BorderSide(color: AdminEmpColors.border),
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 20),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text('View All', style: TextStyle(fontWeight: FontWeight.w700)),
+                child: Text(
+                  'View All',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: compact ? 13 : 14),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: compact ? 10 : 16),
           const Divider(height: 1, color: Color(0xFFEDEFF3)),
           if (rows.isEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 44),
+              padding: EdgeInsets.symmetric(vertical: compact ? 28 : 44),
               child: Center(
                 child: Text(
                   emptyText,
-                  style: const TextStyle(fontSize: 15, color: AdminEmpColors.muted),
+                  style: TextStyle(fontSize: compact ? 14 : 15, color: AdminEmpColors.muted),
                 ),
               ),
             )
           else
             for (var i = 0; i < rows.length; i++) ...[
-              _row(rows[i]),
+              _row(rows[i], compact),
               if (i != rows.length - 1) const Divider(height: 1, color: Color(0xFFEDEFF3)),
             ],
         ],
@@ -98,7 +107,7 @@ class AdminOverviewPendingCard extends StatelessWidget {
     );
   }
 
-  Widget _row(AdminPendingRowData r) {
+  Widget _row(AdminPendingRowData r, bool compact) {
     final text = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -106,38 +115,39 @@ class AdminOverviewPendingCard extends StatelessWidget {
           r.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 16,
+          style: TextStyle(
+            fontSize: compact ? 14.5 : 16,
             fontWeight: FontWeight.w600,
             color: AdminEmpColors.text,
           ),
         ),
-        const SizedBox(height: 3),
+        SizedBox(height: compact ? 2 : 3),
         Text(
           r.subtitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 13.5, color: AdminEmpColors.muted),
+          style: TextStyle(fontSize: compact ? 12.5 : 13.5, color: AdminEmpColors.muted),
         ),
       ],
     );
 
     final buttons = AdminApproveRejectButtons(onApprove: r.onApprove, onReject: r.onReject);
+    final vPad = compact ? 10.0 : 14.0;
 
     return LayoutBuilder(
       builder: (context, c) {
         // narrow (phone): buttons go under the text
         if (c.maxWidth < 420) {
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14),
+            padding: EdgeInsets.symmetric(vertical: vPad),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [text, const SizedBox(height: 10), buttons],
+              children: [text, SizedBox(height: compact ? 8 : 10), buttons],
             ),
           );
         }
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: EdgeInsets.symmetric(vertical: vPad),
           child: Row(
             children: [
               Expanded(child: text),

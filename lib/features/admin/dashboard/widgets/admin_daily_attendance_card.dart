@@ -86,6 +86,9 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
   // helpers
   // ------------------------------------------------------------
 
+  /// phone layout (Android / iOS)
+  bool get _compact => MediaQuery.of(context).size.width < 600;
+
   static DateTime _today() {
     final n = DateTime.now();
     return DateTime(n.year, n.month, n.day);
@@ -217,11 +220,13 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = _compact;
     return Container(
       width: double.infinity,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(compact ? 12 : 14),
         border: Border.all(color: const Color(0xFFEDEFF3)),
         boxShadow: const [
           BoxShadow(color: Color(0x0A000000), blurRadius: 12, offset: Offset(0, 3)),
@@ -230,14 +235,25 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 22, 24, 6),
-            child: _header(),
-          ),
+          if (compact)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFAFAFB),
+                border: Border(bottom: BorderSide(color: Color(0xFFEDEFF3))),
+              ),
+              child: _header(),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 22, 24, 6),
+              child: _header(),
+            ),
           if (_loading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 56),
-              child: Center(child: CircularProgressIndicator(color: AdminEmpColors.primary)),
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: compact ? 36 : 56),
+              child: const Center(child: CircularProgressIndicator(color: AdminEmpColors.primary)),
             )
           else if (_error != null)
             _errorBox()
@@ -249,28 +265,53 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
   }
 
   Widget _header() {
-    final title = Column(
+    final compact = _compact;
+    final s = compact ? 38.0 : 42.0; // button size
+
+    final titleText = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
+        Text(
           'Daily Check-In & Check-Out',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AdminEmpColors.text),
+          style: TextStyle(
+            fontSize: compact ? 16 : 20,
+            fontWeight: FontWeight.w700,
+            color: AdminEmpColors.text,
+          ),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: compact ? 2 : 4),
         Text(
           _isToday ? 'Today · $_dateLabel' : _dateLabel,
-          style: const TextStyle(fontSize: 13.5, color: AdminEmpColors.muted),
+          style: TextStyle(fontSize: compact ? 12 : 13.5, color: AdminEmpColors.muted),
         ),
       ],
     );
+
+    final Widget title = compact
+        ? Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AdminEmpColors.primarySoft,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.access_time_rounded, size: 19, color: AdminEmpColors.primary),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: titleText),
+      ],
+    )
+        : titleText;
 
     Widget navBtn(IconData icon, VoidCallback? onTap) => InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        width: 42,
-        height: 42,
+        width: s,
+        height: s,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
@@ -278,7 +319,7 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
         ),
         child: Icon(
           icon,
-          size: 20,
+          size: compact ? 19 : 20,
           color: onTap == null ? const Color(0xFFC9CED6) : AdminEmpColors.text,
         ),
       ),
@@ -288,8 +329,9 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
       onTap: _pickDate,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        height: s,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
@@ -298,41 +340,65 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.calendar_today_outlined, size: 16, color: AdminEmpColors.primary),
-            const SizedBox(width: 8),
+            const Icon(Icons.calendar_today_outlined, size: 15, color: AdminEmpColors.primary),
+            const SizedBox(width: 7),
             Text(
               adminEmpFormatDate(DateTime.utc(_date.year, _date.month, _date.day)),
-              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: AdminEmpColors.text),
+              style: TextStyle(
+                fontSize: compact ? 13.5 : 14.5,
+                fontWeight: FontWeight.w700,
+                color: AdminEmpColors.text,
+              ),
             ),
           ],
         ),
       ),
     );
 
+    final prev = navBtn(Icons.chevron_left_rounded, () => _setDate(_date.subtract(const Duration(days: 1))));
+    final next = navBtn(
+      Icons.chevron_right_rounded,
+      _isToday ? null : () => _setDate(_date.add(const Duration(days: 1))),
+    );
+
+    final todayBtn = OutlinedButton(
+      onPressed: () => _setDate(_today()),
+      style: OutlinedButton.styleFrom(
+        minimumSize: Size(0, s),
+        foregroundColor: AdminEmpColors.primary,
+        side: const BorderSide(color: AdminEmpColors.primary),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Text('Today', style: TextStyle(fontWeight: FontWeight.w700, fontSize: compact ? 13 : 14)),
+    );
+
+    // PHONE: one single row  [<] [   date   ] [>] [Today]
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          title,
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              prev,
+              const SizedBox(width: 8),
+              Expanded(child: dateButton),
+              const SizedBox(width: 8),
+              next,
+              if (!_isToday) ...[const SizedBox(width: 8), todayBtn],
+            ],
+          ),
+        ],
+      );
+    }
+
     final controls = Wrap(
       spacing: 10,
       runSpacing: 10,
       crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        navBtn(Icons.chevron_left_rounded, () => _setDate(_date.subtract(const Duration(days: 1)))),
-        dateButton,
-        navBtn(
-          Icons.chevron_right_rounded,
-          _isToday ? null : () => _setDate(_date.add(const Duration(days: 1))),
-        ),
-        if (!_isToday)
-          OutlinedButton(
-            onPressed: () => _setDate(_today()),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 42),
-              foregroundColor: AdminEmpColors.primary,
-              side: const BorderSide(color: AdminEmpColors.primary),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('Today', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-      ],
+      children: [prev, dateButton, next, if (!_isToday) todayBtn],
     );
 
     return LayoutBuilder(
@@ -376,6 +442,7 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
 
   Widget _content() {
     final rows = _rows();
+    final compact = _compact;
 
     if (rows.isEmpty) {
       return const Padding(
@@ -392,14 +459,17 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 6, 24, 16),
+          padding: compact
+              ? const EdgeInsets.fromLTRB(14, 12, 14, 12)
+              : const EdgeInsets.fromLTRB(24, 6, 24, 16),
           child: _summary(rows),
         ),
         LayoutBuilder(
           builder: (context, c) {
             final wide = c.maxWidth >= 760;
+            final side = wide ? 24.0 : (compact ? 10.0 : 14.0);
             return Padding(
-              padding: EdgeInsets.fromLTRB(wide ? 24 : 14, 0, wide ? 24 : 14, 6),
+              padding: EdgeInsets.fromLTRB(side, 0, side, 6),
               child: wide
                   ? ClipRRect(borderRadius: BorderRadius.circular(8), child: _table(visible))
                   : Column(children: [for (final r in visible) _compactCard(r)]),
@@ -408,7 +478,7 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
         ),
         if (rows.length > _collapsedRows)
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 4, 24, 18),
+            padding: EdgeInsets.fromLTRB(24, 0, 24, compact ? 8 : 18),
             child: Center(
               child: TextButton(
                 onPressed: () => setState(() => _showAll = !_showAll),
@@ -420,7 +490,7 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
             ),
           )
         else
-          const SizedBox(height: 16),
+          SizedBox(height: compact ? 8 : 16),
       ],
     );
   }
@@ -432,7 +502,84 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
   Widget _summary(List<_Row> rows) {
     int count(bool Function(String) t) => rows.where((r) => t(_statusKey(r.record))).length;
 
-    Widget chip(String label, int value, Color dot) => Container(
+    final stats = <_Stat>[
+      if (_isToday)
+        _Stat('Working now', 'Working', rows.where((r) => _isWorking(r.record)).length, AdminEmpColors.primary),
+      _Stat('Present', 'Present', count((s) => s == 'present' || s == 'late' || s == 'half_day'), const Color(0xFF22C55E)),
+      _Stat('Late', 'Late', count((s) => s == 'late'), const Color(0xFFF59E0B)),
+      _Stat('Absent', 'Absent', count((s) => s == 'absent'), const Color(0xFFEF4444)),
+      _Stat('On Leave', 'On Leave', count((s) => s == 'on_leave' || s == 'leave'), const Color(0xFF8B5CF6)),
+      _Stat(
+        _isToday ? 'Not checked in' : 'No record',
+        _isToday ? 'Not in' : 'No record',
+        count((s) => s == 'not_checked_in' || s == 'no_record'),
+        const Color(0xFF9CA3AF),
+      ),
+    ];
+
+    // PHONE: 3 small tiles per row  (value on top, label below)
+    if (_compact) {
+      return LayoutBuilder(
+        builder: (context, c) {
+          const gap = 8.0;
+          final w = (c.maxWidth - gap * 2) / 3;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final s in stats)
+                SizedBox(
+                  width: w,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFAFAFB),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFEDEFF3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${s.value}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1,
+                            color: AdminEmpColors.text,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(color: s.color, shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                s.shortLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 11.5, color: AdminEmpColors.muted),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      );
+    }
+
+    // WEB / TABLET: same chips as before
+    Widget chip(_Stat s) => Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
         color: const Color(0xFFFAFAFB),
@@ -442,29 +589,16 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: s.color, shape: BoxShape.circle)),
           const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontSize: 13, color: AdminEmpColors.muted)),
+          Text(s.label, style: const TextStyle(fontSize: 13, color: AdminEmpColors.muted)),
           const SizedBox(width: 10),
-          Text('$value', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AdminEmpColors.text)),
+          Text('${s.value}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AdminEmpColors.text)),
         ],
       ),
     );
 
-    final working = rows.where((r) => _isWorking(r.record)).length;
-
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        if (_isToday) chip('Working now', working, AdminEmpColors.primary),
-        chip('Present', count((s) => s == 'present' || s == 'late' || s == 'half_day'), const Color(0xFF22C55E)),
-        chip('Late', count((s) => s == 'late'), const Color(0xFFF59E0B)),
-        chip('Absent', count((s) => s == 'absent'), const Color(0xFFEF4444)),
-        chip('On Leave', count((s) => s == 'on_leave' || s == 'leave'), const Color(0xFF8B5CF6)),
-        chip(_isToday ? 'Not checked in' : 'No record', count((s) => s == 'not_checked_in' || s == 'no_record'), const Color(0xFF9CA3AF)),
-      ],
-    );
+    return Wrap(spacing: 10, runSpacing: 10, children: [for (final s in stats) chip(s)]);
   }
 
   // ------------------------------------------------------------
@@ -636,8 +770,8 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
     final rec = r.record;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         border: Border.all(color: AdminEmpColors.border),
         borderRadius: BorderRadius.circular(12),
@@ -648,14 +782,14 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
           Row(
             children: [
               CircleAvatar(
-                radius: 18,
+                radius: 16,
                 backgroundColor: AdminEmpColors.primarySoft,
                 child: Text(
                   e.initials,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AdminEmpColors.primary),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AdminEmpColors.primary),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,21 +798,24 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
                       e.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: AdminEmpColors.text),
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AdminEmpColors.text),
                     ),
                     Text(
                       '${e.employeeCode}  •  ${adminProfOrDash(e.department)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, color: AdminEmpColors.muted),
+                      style: const TextStyle(fontSize: 11.5, color: AdminEmpColors.muted),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 6),
               _statusPill(_statusKey(rec)),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          const Divider(height: 1, color: Color(0xFFF1F2F4)),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(child: _mini('CHECK-IN', adminProfTime(rec?.checkIn))),
@@ -693,7 +830,7 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
 
   Widget _mini(String label, String value) => _miniWidget(
     label,
-    Text(value, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AdminEmpColors.text)),
+    Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AdminEmpColors.text)),
   );
 
   Widget _miniWidget(String label, Widget child) {
@@ -703,13 +840,13 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
         Text(
           label,
           style: const TextStyle(
-            fontSize: 10.5,
+            fontSize: 10,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
+            letterSpacing: 0.4,
             color: AdminEmpColors.muted,
           ),
         ),
-        const SizedBox(height: 3),
+        const SizedBox(height: 2),
         child,
       ],
     );
@@ -772,10 +909,14 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
         label = key == 'no_record' ? 'No record' : adminProfTitle(key);
     }
 
+    final compact = _compact;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 11, vertical: compact ? 4 : 5),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-      child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fg)),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: compact ? 11 : 12, fontWeight: FontWeight.w700, color: fg),
+      ),
     );
   }
 }
@@ -784,4 +925,12 @@ class _Row {
   final AdminEmployeeModel employee;
   final AdminDailyAttendance? record;
   const _Row(this.employee, this.record);
+}
+
+class _Stat {
+  final String label;
+  final String shortLabel;
+  final int value;
+  final Color color;
+  const _Stat(this.label, this.shortLabel, this.value, this.color);
 }

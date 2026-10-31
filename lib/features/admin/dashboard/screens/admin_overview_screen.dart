@@ -61,6 +61,9 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   int? _maxEmployees;
   String _companyId = '';
 
+  /// phone layout (Android / iOS)
+  bool get _compact => MediaQuery.of(context).size.width < 600;
+
   @override
   void initState() {
     super.initState();
@@ -262,8 +265,11 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
     }
     if (_error != null) return _errorState();
 
-    final wide = MediaQuery.of(context).size.width >= 800;
-    final pad = wide ? 28.0 : 14.0;
+    final width = MediaQuery.of(context).size.width;
+    final wide = width >= 800;
+    final compact = width < 600;
+    final pad = wide ? 28.0 : (compact ? 12.0 : 14.0);
+    final gap = compact ? 14.0 : 24.0;
 
     return Container(
       color: AdminEmpColors.bg,
@@ -272,7 +278,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
         onRefresh: () => _load(silent: true),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(pad, 22, pad, 40),
+          padding: EdgeInsets.fromLTRB(pad, compact ? 14 : 22, pad, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -284,16 +290,16 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
                 pendingExpenses: _expenses.length,
                 archived: _archived.length,
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: gap),
               // daily check-in / check-out list (change the day to change the list)
               AdminDailyAttendanceCard(
                 employees: _active,
                 companyId: _companyId,
                 service: _ov,
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: gap),
               _employeesCard(),
-              const SizedBox(height: 24),
+              SizedBox(height: gap),
               _pendingSection(),
             ],
           ),
@@ -349,11 +355,14 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   // ------------------------------------------------------------
 
   Widget _employeesCard() {
+    final compact = _compact;
+
     return Container(
       width: double.infinity,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(compact ? 12 : 14),
         border: Border.all(color: const Color(0xFFEDEFF3)),
         boxShadow: const [
           BoxShadow(color: Color(0x0A000000), blurRadius: 12, offset: Offset(0, 3)),
@@ -362,10 +371,21 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
-            child: _employeesHeader(),
-          ),
+          if (compact)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFAFAFB),
+                border: Border(bottom: BorderSide(color: Color(0xFFEDEFF3))),
+              ),
+              child: _employeesHeader(),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
+              child: _employeesHeader(),
+            ),
           if (_active.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 48),
@@ -400,7 +420,9 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
                 }
 
                 return Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+                  padding: compact
+                      ? const EdgeInsets.fromLTRB(10, 12, 10, 4)
+                      : const EdgeInsets.fromLTRB(14, 0, 14, 6),
                   child: Column(
                     children: [
                       for (final e in _active)
@@ -425,44 +447,102 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   }
 
   Widget _employeesHeader() {
-    final title = Text(
+    final compact = _compact;
+    final h = compact ? 38.0 : 46.0;
+    final fs = compact ? 13.0 : 14.0;
+
+    final titleText = Text(
       'Employees (${_active.length})',
-      style: const TextStyle(
-        fontSize: 20,
+      style: TextStyle(
+        fontSize: compact ? 16 : 20,
         fontWeight: FontWeight.w700,
         color: AdminEmpColors.text,
       ),
     );
 
+    final Widget title = compact
+        ? Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AdminEmpColors.primarySoft,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.people_alt_outlined, size: 19, color: AdminEmpColors.primary),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: titleText),
+      ],
+    )
+        : titleText;
+
     OutlinedButton outlined(String label, VoidCallback onTap) => OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        minimumSize: const Size(0, 46),
+        minimumSize: Size(0, h),
         foregroundColor: AdminEmpColors.text,
         side: const BorderSide(color: AdminEmpColors.border),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 20),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          label,
+          maxLines: 1,
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: fs),
+        ),
+      ),
     );
+
+    ElevatedButton addBtn() => ElevatedButton(
+      onPressed: _addEmployee,
+      style: ElevatedButton.styleFrom(
+        minimumSize: Size(0, h),
+        backgroundColor: AdminEmpColors.primary,
+        foregroundColor: Colors.white,
+        elevation: compact ? 0 : 2,
+        padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          '+ Add Employee',
+          maxLines: 1,
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: fs),
+        ),
+      ),
+    );
+
+    // PHONE: title, then ONE row with 3 buttons
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          title,
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(flex: 10, child: outlined('Export CSV', _exportCsv)),
+              const SizedBox(width: 8),
+              Expanded(flex: 12, child: addBtn()),
+              const SizedBox(width: 8),
+              Expanded(flex: 9, child: outlined('View All', widget.onViewAllEmployees)),
+            ],
+          ),
+        ],
+      );
+    }
 
     final actions = Wrap(
       spacing: 10,
       runSpacing: 10,
       children: [
         outlined('Export CSV', _exportCsv),
-        ElevatedButton(
-          onPressed: _addEmployee,
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size(0, 46),
-            backgroundColor: AdminEmpColors.primary,
-            foregroundColor: Colors.white,
-            elevation: 2,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          child: const Text('+ Add Employee', style: TextStyle(fontWeight: FontWeight.w700)),
-        ),
+        addBtn(),
         outlined('View All', widget.onViewAllEmployees),
       ],
     );
@@ -534,10 +614,12 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
       rows: expenseRows,
     );
 
+    final vGap = _compact ? 14.0 : 20.0;
+
     return LayoutBuilder(
       builder: (context, c) {
         if (c.maxWidth < 900) {
-          return Column(children: [leaves, const SizedBox(height: 20), expenses]);
+          return Column(children: [leaves, SizedBox(height: vGap), expenses]);
         }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,

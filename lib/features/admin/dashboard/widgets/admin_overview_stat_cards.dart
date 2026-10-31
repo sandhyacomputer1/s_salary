@@ -19,18 +19,22 @@ class AdminOverviewStatCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cards = <Widget>[
-      _card('ACTIVE EMPLOYEES', activeValue, highlighted: true),
-      _card('PENDING LEAVES', '$pendingLeaves'),
-      _card('PENDING EXPENSES', '$pendingExpenses'),
-      _card('ARCHIVED EMPLOYEES', '$archived'),
-    ];
-
     return LayoutBuilder(
       builder: (context, c) {
-        final cols = c.maxWidth >= 900 ? 4 : 2;
-        final gap = c.maxWidth >= 900 ? 18.0 : 12.0;
+        final wide = c.maxWidth >= 900;
+        final compact = c.maxWidth < 600;
+
+        final cols = wide ? 4 : 2;
+        final gap = wide ? 18.0 : (compact ? 10.0 : 12.0);
         final w = (c.maxWidth - gap * (cols - 1)) / cols;
+
+        final cards = <Widget>[
+          _card('ACTIVE EMPLOYEES', 'ACTIVE', activeValue, compact, highlighted: true),
+          _card('PENDING LEAVES', 'PENDING LEAVES', '$pendingLeaves', compact),
+          _card('PENDING EXPENSES', 'PENDING EXPENSES', '$pendingExpenses', compact),
+          _card('ARCHIVED EMPLOYEES', 'ARCHIVED', '$archived', compact),
+        ];
+
         return Wrap(
           spacing: gap,
           runSpacing: gap,
@@ -40,13 +44,19 @@ class AdminOverviewStatCards extends StatelessWidget {
     );
   }
 
-  Widget _card(String label, String value, {bool highlighted = false}) {
+  Widget _card(
+      String label,
+      String shortLabel,
+      String value,
+      bool compact, {
+        bool highlighted = false,
+      }) {
     final fg = highlighted ? Colors.white : AdminEmpColors.text;
 
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(compact ? 12 : 14),
         color: highlighted ? null : Colors.white,
         gradient: highlighted
             ? const LinearGradient(
@@ -59,8 +69,8 @@ class AdminOverviewStatCards extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: highlighted ? const Color(0x33E96832) : const Color(0x0A000000),
-            blurRadius: highlighted ? 16 : 10,
-            offset: const Offset(0, 5),
+            blurRadius: highlighted ? (compact ? 10 : 16) : (compact ? 6 : 10),
+            offset: Offset(0, compact ? 3 : 5),
           ),
         ],
       ),
@@ -69,35 +79,42 @@ class AdminOverviewStatCards extends StatelessWidget {
           // building watermark (like the web)
           if (highlighted)
             Positioned(
-              right: -6,
-              bottom: -14,
+              right: compact ? -4 : -6,
+              bottom: compact ? -10 : -14,
               child: Icon(
                 Icons.apartment_rounded,
-                size: 104,
+                size: compact ? 62 : 104,
                 color: Colors.white.withOpacity(0.16),
               ),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+            padding: compact
+                ? const EdgeInsets.fromLTRB(14, 12, 14, 12)
+                : const EdgeInsets.fromLTRB(24, 20, 24, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                    color: highlighted ? Colors.white : AdminEmpColors.muted,
+                // FittedBox: a long label shrinks instead of showing "..."
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    compact ? shortLabel : label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: compact ? 10.5 : 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: compact ? 0.5 : 0.8,
+                      color: highlighted ? Colors.white : AdminEmpColors.muted,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: compact ? 4 : 10),
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: 34,
+                    fontSize: compact ? 24 : 34,
                     fontWeight: FontWeight.w800,
                     height: 1.1,
                     color: fg,
