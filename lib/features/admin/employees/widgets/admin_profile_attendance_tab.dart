@@ -167,17 +167,18 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
   @override
   Widget build(BuildContext context) {
     final data = _data;
+    final isMobile = MediaQuery.of(context).size.width < 600;
 
     return Column(
       children: [
         if (data != null) ...[
           AdminProfileMetricsCard(summary: data.$1),
-          const SizedBox(height: 28),
+          SizedBox(height: isMobile ? 16 : 28),
         ],
-        _planner(),
+        _planner(isMobile),
         if (data != null) ...[
-          const SizedBox(height: 28),
-          _logCard(data.$2),
+          SizedBox(height: isMobile ? 16 : 28),
+          _logCard(data.$2, isMobile),
         ],
       ],
     );
@@ -187,7 +188,7 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
   // planner (calendar)
   // ------------------------------------------------------------
 
-  Widget _planner() {
+  Widget _planner(bool isMobile) {
     final data = _data;
     final days = data == null
         ? const <AdminAttendanceDay>[]
@@ -201,7 +202,9 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
     final todayKey = AdminAttendanceCalendarData.keyOf(DateTime.now());
 
     return AdminProfileCard(
-      padding: const EdgeInsets.fromLTRB(28, 26, 28, 28),
+      padding: isMobile
+          ? const EdgeInsets.fromLTRB(16, 16, 16, 16)
+          : const EdgeInsets.fromLTRB(28, 26, 28, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -214,8 +217,8 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Text(
+                children: [
+                  const Text(
                     'Monthly Attendance Planner',
                     style: TextStyle(
                       fontSize: 18,
@@ -223,30 +226,36 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
                       color: AdminEmpColors.text,
                     ),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
                     'Click on any date below to manually mark Present, Late, Absent, or On Leave for this employee.',
-                    style: TextStyle(fontSize: 13.5, color: AdminEmpColors.muted),
+                    style: TextStyle(fontSize: isMobile ? 12 : 13.5, color: AdminEmpColors.muted),
                   ),
                 ],
               ),
               OutlinedButton(
                 onPressed: () => _mark([todayKey]),
                 style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 48),
+                  minimumSize: Size(0, isMobile ? 40 : 48),
                   foregroundColor: AdminEmpColors.text,
                   side: const BorderSide(color: AdminEmpColors.border),
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 14 : 22),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text('Mark Attendance Today', style: TextStyle(fontWeight: FontWeight.w700)),
+                child: Text(
+                  'Mark Attendance Today',
+                  style: TextStyle(
+                    fontSize: isMobile ? 12.5 : 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 18),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(22),
+            padding: EdgeInsets.all(isMobile ? 12 : 22),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AdminEmpColors.border),
@@ -254,7 +263,7 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _controls(days),
+                _controls(days, isMobile),
                 const SizedBox(height: 18),
                 if (_loading)
                   const Padding(
@@ -267,7 +276,7 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
                     _chips(days),
                     if (_selected.isNotEmpty) ...[
                       const SizedBox(height: 14),
-                      _selectionBar(),
+                      _selectionBar(isMobile),
                     ],
                     const SizedBox(height: 22),
                     AdminAttendanceCalendar(
@@ -285,27 +294,27 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
     );
   }
 
-  Widget _controls(List<AdminAttendanceDay> days) {
+  Widget _controls(List<AdminAttendanceDay> days, bool isMobile) {
     final now = DateTime.now();
 
     Widget navBtn(IconData icon, VoidCallback onTap) => InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        width: 42,
-        height: 42,
+        width: isMobile ? 36 : 42,
+        height: isMobile ? 36 : 42,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AdminEmpColors.border),
         ),
-        child: Icon(icon, size: 20, color: AdminEmpColors.text),
+        child: Icon(icon, size: isMobile ? 18 : 20, color: AdminEmpColors.text),
       ),
     );
 
     final picker = Container(
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      height: isMobile ? 36 : 42,
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
@@ -318,7 +327,11 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
             child: DropdownButton<int>(
               value: _month,
               isDense: true,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AdminEmpColors.text),
+              style: TextStyle(
+                fontSize: isMobile ? 14 : 16,
+                fontWeight: FontWeight.w700,
+                color: AdminEmpColors.text,
+              ),
               items: [
                 for (var m = 1; m <= 12; m++)
                   DropdownMenuItem(value: m, child: Text(adminProfMonthName(m))),
@@ -328,12 +341,16 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
               },
             ),
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: isMobile ? 6 : 14),
           DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               value: _year,
               isDense: true,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AdminEmpColors.primary),
+              style: TextStyle(
+                fontSize: isMobile ? 14 : 16,
+                fontWeight: FontWeight.w700,
+                color: AdminEmpColors.primary,
+              ),
               items: [
                 for (var y = now.year - 3; y <= now.year + 1; y++)
                   DropdownMenuItem(value: y, child: Text('$y')),
@@ -350,11 +367,11 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
     final selectBtn = ElevatedButton(
       onPressed: (_loading || _data == null) ? null : () => _toggleWorkingDays(days),
       style: ElevatedButton.styleFrom(
-        minimumSize: const Size(0, 42),
+        minimumSize: Size(0, isMobile ? 36 : 42),
         elevation: 0,
         backgroundColor: const Color(0xFFEEF2F7),
         foregroundColor: AdminEmpColors.text,
-        padding: const EdgeInsets.symmetric(horizontal: 18),
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 18),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
           side: const BorderSide(color: Color(0xFFD9DEE7)),
@@ -362,7 +379,10 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
       ),
       child: Text(
         _selected.isEmpty ? 'Select Working Days' : 'Clear Selection',
-        style: const TextStyle(fontWeight: FontWeight.w700),
+        style: TextStyle(
+          fontSize: isMobile ? 12.5 : 14,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
 
@@ -376,9 +396,9 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
           mainAxisSize: MainAxisSize.min,
           children: [
             navBtn(Icons.chevron_left_rounded, () => _shift(-1)),
-            const SizedBox(width: 12),
+            SizedBox(width: isMobile ? 6 : 12),
             picker,
-            const SizedBox(width: 12),
+            SizedBox(width: isMobile ? 6 : 12),
             navBtn(Icons.chevron_right_rounded, () => _shift(1)),
           ],
         ),
@@ -402,7 +422,7 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
     return LayoutBuilder(
       builder: (context, c) {
         final cols = c.maxWidth >= 900 ? 5 : (c.maxWidth >= 560 ? 3 : 2);
-        const gap = 14.0;
+        final gap = c.maxWidth >= 600 ? 14.0 : 10.0;
         final w = (c.maxWidth - gap * (cols - 1)) / cols;
 
         return Wrap(
@@ -412,7 +432,7 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
             for (final it in items)
               Container(
                 width: w,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFAFAFB),
                   borderRadius: BorderRadius.circular(10),
@@ -421,20 +441,22 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
                 child: Row(
                   children: [
                     Container(
-                      width: 9,
-                      height: 9,
+                      width: 8,
+                      height: 8,
                       decoration: BoxDecoration(color: it.$3, shape: BoxShape.circle),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         it.$1,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AdminEmpColors.muted),
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: AdminEmpColors.muted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     Text(
                       '${it.$2}',
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AdminEmpColors.text),
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AdminEmpColors.text),
                     ),
                   ],
                 ),
@@ -445,10 +467,10 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
     );
   }
 
-  Widget _selectionBar() {
+  Widget _selectionBar(bool isMobile) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: AdminEmpColors.primarySoft,
         borderRadius: BorderRadius.circular(10),
@@ -461,26 +483,26 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
         children: [
           Text(
             '${_selected.length} date(s) selected',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AdminEmpColors.primary),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AdminEmpColors.primary),
           ),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextButton(
                 onPressed: () => setState(_selected.clear),
-                child: const Text('Clear'),
+                child: const Text('Clear', style: TextStyle(fontSize: 13)),
               ),
               const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: () => _mark(_selected.toList()),
                 style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(0, 40),
+                  minimumSize: Size(0, isMobile ? 34 : 40),
                   backgroundColor: AdminEmpColors.primary,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text('Mark Selected', style: TextStyle(fontWeight: FontWeight.w700)),
+                child: const Text('Mark Selected', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -515,7 +537,7 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
   // daily check-in / check-out log
   // ------------------------------------------------------------
 
-  Widget _logCard(List<AdminAttendanceLog> source) {
+  Widget _logCard(List<AdminAttendanceLog> source, bool isMobile) {
     final logs = [...source]..sort((a, b) => a.dateKey.compareTo(b.dateKey));
 
     String lowerTime(DateTime? d) => d == null ? '—' : adminProfTime(d).toLowerCase();
@@ -523,7 +545,9 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
         l.isLate && l.status.toLowerCase() == 'present' ? 'late' : l.status;
 
     return AdminProfileCard(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 12),
+      padding: isMobile
+          ? const EdgeInsets.fromLTRB(16, 20, 16, 8)
+          : const EdgeInsets.fromLTRB(24, 28, 24, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -543,7 +567,7 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
                 rows: [
                   for (final l in logs)
                     [
-                      Text(l.dateKey, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                      Text(l.dateKey, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                       Text(lowerTime(l.checkIn)),
                       Text(lowerTime(l.checkOut)),
                       Text(l.totalHours == null ? '—' : '${adminProfHours(l.totalHours!)} hrs'),
@@ -554,7 +578,7 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
                   final l = logs[i];
                   return Container(
                     margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       border: Border.all(color: AdminEmpColors.border),
                       borderRadius: BorderRadius.circular(10),
@@ -565,12 +589,12 @@ class _AdminProfileAttendanceTabState extends State<AdminProfileAttendanceTab> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(l.dateKey, style: const TextStyle(fontWeight: FontWeight.w700)),
+                              Text(l.dateKey, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
                               const SizedBox(height: 4),
                               Text(
                                 '${lowerTime(l.checkIn)}  →  ${lowerTime(l.checkOut)}'
                                     '${l.totalHours == null ? '' : '  •  ${adminProfHours(l.totalHours!)} hrs'}',
-                                style: const TextStyle(fontSize: 12.5, color: AdminEmpColors.muted),
+                                style: const TextStyle(fontSize: 12, color: AdminEmpColors.muted),
                               ),
                             ],
                           ),
@@ -600,7 +624,7 @@ class _LogStatusPill extends StatelessWidget {
     final isPresent = s == 'present';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: isPresent ? AdminEmpColors.primarySoft : const Color(0xFFF1F2F4),
         borderRadius: BorderRadius.circular(20),
@@ -609,19 +633,19 @@ class _LogStatusPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 8,
-            height: 8,
+            width: 7,
+            height: 7,
             decoration: BoxDecoration(
               color: isPresent ? AdminEmpColors.primary : Colors.transparent,
               shape: BoxShape.circle,
               border: isPresent ? null : Border.all(color: AdminEmpColors.muted, width: 1.3),
             ),
           ),
-          const SizedBox(width: 7),
+          const SizedBox(width: 6),
           Text(
             s.replaceAll('_', ' '),
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: isPresent ? AdminEmpColors.primary : AdminEmpColors.text,
             ),

@@ -30,6 +30,12 @@ class AdminProfileHeaderCard extends StatelessWidget {
       if (e.email.isNotEmpty) e.email,
     ].join(' · ');
 
+    // Responsive padding
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final innerPadding = isMobile
+        ? const EdgeInsets.fromLTRB(16, 20, 16, 20)
+        : const EdgeInsets.fromLTRB(32, 28, 32, 26);
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -41,10 +47,9 @@ class AdminProfileHeaderCard extends StatelessWidget {
           BoxShadow(color: Color(0x14000000), blurRadius: 14, offset: Offset(0, 4)),
         ],
       ),
-      // 4px accent bar on top, card below
       padding: const EdgeInsets.only(top: 4),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(32, 28, 32, 26),
+        padding: innerPadding,
         decoration: const BoxDecoration(
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(16), top: Radius.circular(4)),
           gradient: LinearGradient(
@@ -56,7 +61,7 @@ class AdminProfileHeaderCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _top(line1, line2),
+            _top(context, line1, line2),
             const SizedBox(height: 22),
             const Divider(height: 1, color: Color(0xFFF0E4DC)),
             const SizedBox(height: 22),
@@ -76,10 +81,12 @@ class AdminProfileHeaderCard extends StatelessWidget {
     );
   }
 
-  Widget _top(String line1, String line2) {
+  Widget _top(BuildContext context, String line1, String line2) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
     final avatar = Container(
-      width: 68,
-      height: 68,
+      width: isMobile ? 56 : 68,
+      height: isMobile ? 56 : 68,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         gradient: const LinearGradient(
@@ -94,7 +101,11 @@ class AdminProfileHeaderCard extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         employee.initials,
-        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white),
+        style: TextStyle(
+          fontSize: isMobile ? 20 : 24,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+        ),
       ),
     );
 
@@ -116,7 +127,7 @@ class AdminProfileHeaderCard extends StatelessWidget {
           Text(
             employee.status.replaceAll('_', ' '),
             style: const TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: AdminEmpColors.primary,
             ),
@@ -129,7 +140,7 @@ class AdminProfileHeaderCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         avatar,
-        const SizedBox(width: 20),
+        SizedBox(width: isMobile ? 12 : 20),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,8 +152,8 @@ class AdminProfileHeaderCard extends StatelessWidget {
                 children: [
                   Text(
                     employee.name,
-                    style: const TextStyle(
-                      fontSize: 26,
+                    style: TextStyle(
+                      fontSize: isMobile ? 20 : 26,
                       fontWeight: FontWeight.w800,
                       color: AdminEmpColors.text,
                     ),
@@ -151,10 +162,22 @@ class AdminProfileHeaderCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              Text(line1, style: const TextStyle(fontSize: 14.5, color: Color(0xFF4B5563))),
+              Text(
+                line1,
+                style: TextStyle(
+                  fontSize: isMobile ? 12.5 : 14.5,
+                  color: const Color(0xFF4B5563),
+                ),
+              ),
               if (line2.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                Text(line2, style: const TextStyle(fontSize: 14.5, color: Color(0xFF4B5563))),
+                Text(
+                  line2,
+                  style: TextStyle(
+                    fontSize: isMobile ? 12.5 : 14.5,
+                    color: const Color(0xFF4B5563),
+                  ),
+                ),
               ],
             ],
           ),

@@ -363,33 +363,67 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
 
     if (archived) return title;
 
-    OutlinedButton outlined(String label, VoidCallback onTap) => OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44),
-        foregroundColor: AdminEmpColors.text,
-        side: const BorderSide(color: AdminEmpColors.border),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-    );
-
-    final actions = Wrap(
-      spacing: 10,
-      runSpacing: 10,
+    // ------------------------------------------------------------
+    // Horizontal Buttons (Export CSV / Bulk Import / + Add Employee)
+    // ------------------------------------------------------------
+    final actions = Row(
       children: [
-        outlined('Export CSV', _exportCsv),
-        outlined('Bulk Import', _openBulkImport),
-        ElevatedButton(
-          onPressed: _openAdd,
-          style: ElevatedButton.styleFrom(minimumSize: const Size(0, 44),
-            backgroundColor: AdminEmpColors.primary,
-            foregroundColor: Colors.white,
-            elevation: 2,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _exportCsv,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 40),
+              foregroundColor: AdminEmpColors.text,
+              side: const BorderSide(color: AdminEmpColors.border),
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text(
+              'Export CSV',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+            ),
           ),
-          child: const Text('+ Add Employee', style: TextStyle(fontWeight: FontWeight.w700)),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _openBulkImport,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 40),
+              foregroundColor: AdminEmpColors.text,
+              side: const BorderSide(color: AdminEmpColors.border),
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text(
+              'Bulk Import',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: _openAdd,
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(0, 40),
+              backgroundColor: AdminEmpColors.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text(
+              '+ Add Employee',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+            ),
+          ),
         ),
       ],
     );
@@ -399,12 +433,20 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
         if (c.maxWidth < 620) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [title, const SizedBox(height: 14), actions],
+            children: [
+              title,
+              const SizedBox(height: 14),
+              actions,
+            ],
           );
         }
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [title, actions],
+          children: [
+            title,
+            const SizedBox(width: 16),
+            Expanded(child: actions),
+          ],
         );
       },
     );

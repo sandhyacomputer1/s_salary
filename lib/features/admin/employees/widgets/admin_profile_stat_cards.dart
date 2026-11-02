@@ -12,17 +12,19 @@ class AdminProfileStatCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cards = <Widget>[
-      _card('PRESENT DAYS', '${summary.present}', highlighted: true),
-      _card('LATE DAYS', '${summary.late}'),
-      _card('HALF DAYS', '${summary.halfDay}'),
-      _card('TOTAL WORK HOURS', '${adminProfHours(summary.totalHours)} hrs'),
+      _card(context, 'PRESENT DAYS', '${summary.present}', highlighted: true),
+      _card(context, 'LATE DAYS', '${summary.late}'),
+      _card(context, 'HALF DAYS', '${summary.halfDay}'),
+      _card(context, 'TOTAL WORK HOURS', '${adminProfHours(summary.totalHours)} hrs'),
     ];
 
     return LayoutBuilder(
       builder: (context, c) {
         final cols = c.maxWidth >= 900 ? 4 : 2;
-        const gap = 18.0;
+        // Reduce gap on smaller screens
+        final gap = c.maxWidth >= 600 ? 18.0 : 12.0;
         final w = (c.maxWidth - gap * (cols - 1)) / cols;
+
         return Wrap(
           spacing: gap,
           runSpacing: gap,
@@ -32,12 +34,20 @@ class AdminProfileStatCards extends StatelessWidget {
     );
   }
 
-  Widget _card(String label, String value, {bool highlighted = false}) {
+  Widget _card(BuildContext context, String label, String value, {bool highlighted = false}) {
     final fg = highlighted ? Colors.white : AdminEmpColors.text;
     final labelColor = highlighted ? Colors.white : AdminEmpColors.muted;
 
+    // Scale down padding and font size for mobile
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final padding = isMobile
+        ? const EdgeInsets.fromLTRB(16, 16, 16, 16)
+        : const EdgeInsets.fromLTRB(26, 22, 26, 22);
+    final valueFontSize = isMobile ? 28.0 : 34.0;
+    final labelFontSize = isMobile ? 11.0 : 12.5;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(26, 22, 26, 22),
+      padding: padding,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         color: highlighted ? null : Colors.white,
@@ -63,7 +73,7 @@ class AdminProfileStatCards extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              fontSize: 12.5,
+              fontSize: labelFontSize,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.8,
               color: labelColor,
@@ -72,7 +82,12 @@ class AdminProfileStatCards extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             value,
-            style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: fg, height: 1.1),
+            style: TextStyle(
+              fontSize: valueFontSize,
+              fontWeight: FontWeight.w800,
+              color: fg,
+              height: 1.1,
+            ),
           ),
         ],
       ),
