@@ -26,6 +26,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../services/admin_session_profile_service.dart';
+import '../widgets/admin_brand_logo.dart';
 import '../widgets/admin_notifications_panel/admin_notifications_panel.dart';
 import 'admin_overview_screen.dart';
 
@@ -100,6 +102,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   /// (set when the person icon is tapped on the Overview).
   AdminEmployeeModel? _pendingProfile;
 
+  /// Name + role of the logged-in person (sidebar footer).
+  AdminSessionProfile _me = const AdminSessionProfile(name: 'Admin', roleLabel: 'Admin');
+
   // CLOCK
   Timer? _clockTimer;
   String _currentDate = '';
@@ -115,6 +120,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
     _loadDashboardData();
     _loadLicense();
+    _loadMyProfile();
 
     // Ask for permissions as soon as the dashboard is on screen.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -289,6 +295,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     });
     _loadLicense();
     await _loadDashboardData();
+  }
+
+  /// Who is logged in: admin / owner / HR / accountant / manager.
+  Future<void> _loadMyProfile() async {
+    final profile = await AdminSessionProfileService().load();
+    if (!mounted) return;
+    setState(() => _me = profile);
   }
 
   /// Loads the licence data (start date, valid until, duration).
@@ -712,19 +725,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // ----------------------------------------------------------
 
   Widget _sidebarBrand(bool collapsed, bool isMobileDrawer) {
-    final logo = Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(color: _primaryTint, borderRadius: BorderRadius.circular(11)),
-      child: const Icon(Icons.account_balance_wallet_outlined, color: _primary, size: 22),
-    );
-
     if (collapsed) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(0, 16, 0, 14),
         child: Column(
           children: [
-            logo,
+            const AdminBrandLogo(size: 42),
             const SizedBox(height: 12),
             _collapseButton(),
           ],
@@ -732,20 +738,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       );
     }
 
+    // same as the web: logo + "Sandhya Salary"
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 18, isMobileDrawer ? 16 : 12, 16),
       child: Row(
         children: [
-          logo,
-          const SizedBox(width: 11),
+          const AdminBrandLogo(size: 42),
+          const SizedBox(width: 12),
           const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('S Salary', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _textDark)),
-                SizedBox(height: 2),
-                Text('Company Admin', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: Color(0xFF8A93A1))),
-              ],
+            child: Text(
+              'Sandhya Salary',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827),
+                letterSpacing: -0.2,
+              ),
             ),
           ),
           if (!isMobileDrawer) ...[
@@ -796,7 +806,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget _drawerSection(String title, {bool first = false}) {
     return Padding(
       padding: EdgeInsets.fromLTRB(12, first ? 6 : 16, 12, 6),
-      child: Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF98A1AF), letterSpacing: 0.8)),
+      child: Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.9)),
     );
   }
 
@@ -829,7 +839,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               child: SizedBox(
                 height: 44,
                 child: Center(
-                  child: Icon(item.icon, size: 20, color: selected ? _primary : const Color(0xFF596273)),
+                  child: Icon(item.icon, size: 22, color: selected ? _primary : const Color(0xFF1F2937)),
                 ),
               ),
             ),
@@ -848,7 +858,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             hoverColor: const Color(0xFFF3F4F6),
             onTap: item.onTap,
             child: SizedBox(
-              height: 42,
+              height: 44,
               child: Row(
                 children: [
                   const SizedBox(width: 6),
@@ -860,15 +870,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     decoration: BoxDecoration(color: _primary, borderRadius: BorderRadius.circular(3)),
                   ),
                   const SizedBox(width: 9),
-                  Icon(item.icon, size: 20, color: selected ? _primary : const Color(0xFF596273)),
+                  Icon(item.icon, size: 22, color: selected ? _primary : const Color(0xFF1F2937)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 180),
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 14.5,
                         fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                        color: selected ? _primary : const Color(0xFF374151),
+                        color: selected ? _primary : const Color(0xFF111827),
                       ),
                       child: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
@@ -908,10 +918,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _sidebarFooter(bool collapsed) {
     final avatar = Container(
-      width: 36,
-      height: 36,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(color: _primaryTint, borderRadius: BorderRadius.circular(10)),
-      child: const Icon(Icons.person_outline_rounded, color: _primary, size: 20),
+      alignment: Alignment.center,
+      child: Text(
+        _me.initials,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _primary),
+      ),
     );
 
     if (collapsed) {
@@ -920,22 +934,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            avatar,
+            Tooltip(message: '${_me.name} · ${_me.roleLabel}', child: avatar),
             const SizedBox(height: 6),
             IconButton(
               tooltip: 'Logout',
               onPressed: _logout,
-              icon: const Icon(Icons.logout_outlined, size: 19, color: Color(0xFF6B7280)),
+              icon: const Icon(Icons.logout_outlined, size: 20, color: Color(0xFF374151)),
             ),
           ],
         ),
       );
     }
 
+    // name of the person who logged in + their role (Company Owner, HR Admin ...)
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+        padding: const EdgeInsets.fromLTRB(10, 9, 4, 9),
         decoration: BoxDecoration(
           color: _pageBg,
           borderRadius: BorderRadius.circular(12),
@@ -945,13 +960,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           children: [
             avatar,
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Admin', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _textDark)),
-                  SizedBox(height: 2),
-                  Text('Company Owner', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: Color(0xFF8A93A1))),
+                  Text(
+                    _me.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _me.roleLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF6B7280)),
+                  ),
                 ],
               ),
             ),
@@ -959,7 +984,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               tooltip: 'Logout',
               onPressed: _logout,
               visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.logout_outlined, size: 19, color: Color(0xFF6B7280)),
+              icon: const Icon(Icons.logout_outlined, size: 20, color: Color(0xFF374151)),
             ),
           ],
         ),

@@ -61,9 +61,6 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   int? _maxEmployees;
   String _companyId = '';
 
-  /// phone layout (Android / iOS)
-  bool get _compact => MediaQuery.of(context).size.width < 600;
-
   @override
   void initState() {
     super.initState();
@@ -265,11 +262,8 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
     }
     if (_error != null) return _errorState();
 
-    final width = MediaQuery.of(context).size.width;
-    final wide = width >= 800;
-    final compact = width < 600;
-    final pad = wide ? 28.0 : (compact ? 12.0 : 14.0);
-    final gap = compact ? 14.0 : 24.0;
+    final wide = MediaQuery.of(context).size.width >= 800;
+    final pad = wide ? 28.0 : 14.0;
 
     return Container(
       color: AdminEmpColors.bg,
@@ -278,7 +272,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
         onRefresh: () => _load(silent: true),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(pad, compact ? 14 : 22, pad, 32),
+          padding: EdgeInsets.fromLTRB(pad, 22, pad, 40),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -290,16 +284,16 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
                 pendingExpenses: _expenses.length,
                 archived: _archived.length,
               ),
-              SizedBox(height: gap),
+              const SizedBox(height: 24),
               // daily check-in / check-out list (change the day to change the list)
               AdminDailyAttendanceCard(
                 employees: _active,
                 companyId: _companyId,
                 service: _ov,
               ),
-              SizedBox(height: gap),
+              const SizedBox(height: 24),
               _employeesCard(),
-              SizedBox(height: gap),
+              const SizedBox(height: 24),
               _pendingSection(),
             ],
           ),
@@ -355,14 +349,11 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   // ------------------------------------------------------------
 
   Widget _employeesCard() {
-    final compact = _compact;
-
     return Container(
       width: double.infinity,
-      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(compact ? 12 : 14),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFEDEFF3)),
         boxShadow: const [
           BoxShadow(color: Color(0x0A000000), blurRadius: 12, offset: Offset(0, 3)),
@@ -371,21 +362,16 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (compact)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFAFAFB),
-                border: Border(bottom: BorderSide(color: Color(0xFFEDEFF3))),
-              ),
-              child: _employeesHeader(),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
-              child: _employeesHeader(),
-            ),
+          LayoutBuilder(
+            builder: (context, c) {
+              final narrow = c.maxWidth < 700;
+              return Padding(
+                // phone: same side padding (14) as the employee rows below
+                padding: EdgeInsets.fromLTRB(narrow ? 14 : 24, narrow ? 18 : 22, narrow ? 14 : 24, narrow ? 14 : 18),
+                child: _employeesHeader(narrow),
+              );
+            },
+          ),
           if (_active.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 48),
@@ -420,12 +406,10 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
                 }
 
                 return Padding(
-                  padding: compact
-                      ? const EdgeInsets.fromLTRB(10, 12, 10, 4)
-                      : const EdgeInsets.fromLTRB(14, 0, 14, 6),
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
                   child: Column(
                     children: [
-                      for (final e in _active)
+                      for (final e in _active.take(5))
                         AdminEmployeeCard(
                           employee: e,
                           archived: false,
@@ -435,6 +419,20 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
                           onArchive: () => _archive(e),
                           onRestore: () {},
                           onDeleteForever: () {},
+                        ),
+                      if (_active.length > 5)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2, bottom: 8),
+                          child: TextButton(
+                            onPressed: widget.onViewAllEmployees,
+                            child: Text(
+                              'View all employees (${_active.length})',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: AdminEmpColors.primary,
+                              ),
+                            ),
+                          ),
                         ),
                     ],
                   ),
@@ -446,120 +444,112 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
     );
   }
 
-  Widget _employeesHeader() {
-    final compact = _compact;
-    final h = compact ? 38.0 : 46.0;
-    final fs = compact ? 13.0 : 14.0;
-
-    final titleText = Text(
+  Widget _employeesHeader(bool narrow) {
+    final title = Text(
       'Employees (${_active.length})',
       style: TextStyle(
-        fontSize: compact ? 16 : 20,
+        fontSize: narrow ? 19 : 20,
         fontWeight: FontWeight.w700,
         color: AdminEmpColors.text,
       ),
     );
 
-    final Widget title = compact
-        ? Row(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: AdminEmpColors.primarySoft,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(Icons.people_alt_outlined, size: 19, color: AdminEmpColors.primary),
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: titleText),
-      ],
-    )
-        : titleText;
-
-    OutlinedButton outlined(String label, VoidCallback onTap) => OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        minimumSize: Size(0, h),
-        foregroundColor: AdminEmpColors.text,
-        side: const BorderSide(color: AdminEmpColors.border),
-        padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Text(
-          label,
-          maxLines: 1,
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: fs),
-        ),
-      ),
-    );
-
-    ElevatedButton addBtn() => ElevatedButton(
-      onPressed: _addEmployee,
-      style: ElevatedButton.styleFrom(
-        minimumSize: Size(0, h),
-        backgroundColor: AdminEmpColors.primary,
-        foregroundColor: Colors.white,
-        elevation: compact ? 0 : 2,
-        padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Text(
-          '+ Add Employee',
-          maxLines: 1,
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: fs),
-        ),
-      ),
-    );
-
-    // PHONE: title, then ONE row with 3 buttons
-    if (compact) {
+    // ---------- phone ----------
+    //  Employees (5)                      [ View All ]
+    //  [   Export CSV   ]  [ + Add Employee ]
+    if (narrow) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          title,
-          const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(flex: 10, child: outlined('Export CSV', _exportCsv)),
-              const SizedBox(width: 8),
-              Expanded(flex: 12, child: addBtn()),
-              const SizedBox(width: 8),
-              Expanded(flex: 9, child: outlined('View All', widget.onViewAllEmployees)),
+              Expanded(child: title),
+              OutlinedButton(
+                onPressed: widget.onViewAllEmployees,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 38),
+                  foregroundColor: AdminEmpColors.text,
+                  side: const BorderSide(color: AdminEmpColors.border),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('View All', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _exportCsv,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 44),
+                    foregroundColor: AdminEmpColors.text,
+                    side: const BorderSide(color: AdminEmpColors.border),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Export CSV', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _addEmployee,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(0, 44),
+                    backgroundColor: AdminEmpColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('+ Add Employee', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                ),
+              ),
             ],
           ),
         ],
       );
     }
 
-    final actions = Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        outlined('Export CSV', _exportCsv),
-        addBtn(),
-        outlined('View All', widget.onViewAllEmployees),
-      ],
+    // ---------- web / tablet ----------
+    OutlinedButton outlined(String label, VoidCallback onTap) => OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 46),
+        foregroundColor: AdminEmpColors.text,
+        side: const BorderSide(color: AdminEmpColors.border),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
     );
 
-    return LayoutBuilder(
-      builder: (context, c) {
-        if (c.maxWidth < 620) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [title, const SizedBox(height: 14), actions],
-          );
-        }
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [title, actions],
-        );
-      },
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        title,
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            outlined('Export CSV', _exportCsv),
+            ElevatedButton(
+              onPressed: _addEmployee,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(0, 46),
+                backgroundColor: AdminEmpColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 2,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('+ Add Employee', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            outlined('View All', widget.onViewAllEmployees),
+          ],
+        ),
+      ],
     );
   }
 
@@ -614,12 +604,10 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
       rows: expenseRows,
     );
 
-    final vGap = _compact ? 14.0 : 20.0;
-
     return LayoutBuilder(
       builder: (context, c) {
         if (c.maxWidth < 900) {
-          return Column(children: [leaves, SizedBox(height: vGap), expenses]);
+          return Column(children: [leaves, const SizedBox(height: 20), expenses]);
         }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,

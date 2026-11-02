@@ -86,9 +86,6 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
   // helpers
   // ------------------------------------------------------------
 
-  /// phone layout (Android / iOS)
-  bool get _compact => MediaQuery.of(context).size.width < 600;
-
   static DateTime _today() {
     final n = DateTime.now();
     return DateTime(n.year, n.month, n.day);
@@ -220,13 +217,11 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = _compact;
     return Container(
       width: double.infinity,
-      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(compact ? 12 : 14),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFEDEFF3)),
         boxShadow: const [
           BoxShadow(color: Color(0x0A000000), blurRadius: 12, offset: Offset(0, 3)),
@@ -235,25 +230,20 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (compact)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFAFAFB),
-                border: Border(bottom: BorderSide(color: Color(0xFFEDEFF3))),
-              ),
-              child: _header(),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 22, 24, 6),
-              child: _header(),
-            ),
+          LayoutBuilder(
+            builder: (context, c) {
+              final narrow = c.maxWidth < 760;
+              return Padding(
+                // phone: same side padding (14) as the chips and the rows below
+                padding: EdgeInsets.fromLTRB(narrow ? 14 : 24, narrow ? 18 : 22, narrow ? 14 : 24, 6),
+                child: _header(narrow),
+              );
+            },
+          ),
           if (_loading)
-            Padding(
-              padding: EdgeInsets.symmetric(vertical: compact ? 36 : 56),
-              child: const Center(child: CircularProgressIndicator(color: AdminEmpColors.primary)),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 56),
+              child: Center(child: CircularProgressIndicator(color: AdminEmpColors.primary)),
             )
           else if (_error != null)
             _errorBox()
@@ -264,54 +254,15 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
     );
   }
 
-  Widget _header() {
-    final compact = _compact;
-    final s = compact ? 38.0 : 42.0; // button size
+  static const List<String> _shortDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-    final titleText = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Daily Check-In & Check-Out',
-          style: TextStyle(
-            fontSize: compact ? 16 : 20,
-            fontWeight: FontWeight.w700,
-            color: AdminEmpColors.text,
-          ),
-        ),
-        SizedBox(height: compact ? 2 : 4),
-        Text(
-          _isToday ? 'Today · $_dateLabel' : _dateLabel,
-          style: TextStyle(fontSize: compact ? 12 : 13.5, color: AdminEmpColors.muted),
-        ),
-      ],
-    );
-
-    final Widget title = compact
-        ? Row(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: AdminEmpColors.primarySoft,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(Icons.access_time_rounded, size: 19, color: AdminEmpColors.primary),
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: titleText),
-      ],
-    )
-        : titleText;
-
+  Widget _header(bool narrow) {
     Widget navBtn(IconData icon, VoidCallback? onTap) => InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        width: s,
-        height: s,
+        width: 42,
+        height: 42,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
@@ -319,35 +270,38 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
         ),
         child: Icon(
           icon,
-          size: compact ? 19 : 20,
+          size: 20,
           color: onTap == null ? const Color(0xFFC9CED6) : AdminEmpColors.text,
         ),
       ),
     );
 
-    final dateButton = InkWell(
+    final dateText = adminEmpFormatDate(DateTime.utc(_date.year, _date.month, _date.day));
+
+    Widget dateButton({required bool expand, required String label}) => InkWell(
       onTap: _pickDate,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        height: s,
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        height: 42,
+        width: expand ? double.infinity : null,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AdminEmpColors.border),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.calendar_today_outlined, size: 15, color: AdminEmpColors.primary),
-            const SizedBox(width: 7),
-            Text(
-              adminEmpFormatDate(DateTime.utc(_date.year, _date.month, _date.day)),
-              style: TextStyle(
-                fontSize: compact ? 13.5 : 14.5,
-                fontWeight: FontWeight.w700,
-                color: AdminEmpColors.text,
+            const Icon(Icons.calendar_today_outlined, size: 16, color: AdminEmpColors.primary),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: AdminEmpColors.text),
               ),
             ),
           ],
@@ -355,66 +309,92 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
       ),
     );
 
-    final prev = navBtn(Icons.chevron_left_rounded, () => _setDate(_date.subtract(const Duration(days: 1))));
-    final next = navBtn(
-      Icons.chevron_right_rounded,
-      _isToday ? null : () => _setDate(_date.add(const Duration(days: 1))),
-    );
-
-    final todayBtn = OutlinedButton(
+    final todayChip = OutlinedButton(
       onPressed: () => _setDate(_today()),
       style: OutlinedButton.styleFrom(
-        minimumSize: Size(0, s),
+        minimumSize: const Size(0, 38),
         foregroundColor: AdminEmpColors.primary,
         side: const BorderSide(color: AdminEmpColors.primary),
-        padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
-      child: Text('Today', style: TextStyle(fontWeight: FontWeight.w700, fontSize: compact ? 13 : 14)),
+      child: const Text('Today', style: TextStyle(fontWeight: FontWeight.w700)),
     );
 
-    // PHONE: one single row  [<] [   date   ] [>] [Today]
-    if (compact) {
+    final titleBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Daily Check-In & Check-Out',
+          style: TextStyle(
+            fontSize: narrow ? 18.5 : 20,
+            fontWeight: FontWeight.w700,
+            color: AdminEmpColors.text,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _isToday ? 'Today · $_dateLabel' : _dateLabel,
+          style: const TextStyle(fontSize: 13, color: AdminEmpColors.muted),
+        ),
+      ],
+    );
+
+    // ---------- phone: title, then  ‹  [ Mon, 2 Nov 2026 ]  › ----------
+    if (narrow) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          title,
-          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: titleBlock),
+              if (!_isToday) ...[const SizedBox(width: 10), todayChip],
+            ],
+          ),
+          const SizedBox(height: 14),
           Row(
             children: [
-              prev,
-              const SizedBox(width: 8),
-              Expanded(child: dateButton),
-              const SizedBox(width: 8),
-              next,
-              if (!_isToday) ...[const SizedBox(width: 8), todayBtn],
+              navBtn(Icons.chevron_left_rounded, () => _setDate(_date.subtract(const Duration(days: 1)))),
+              const SizedBox(width: 10),
+              Expanded(
+                child: dateButton(
+                  expand: true,
+                  label: '${_shortDays[_date.weekday - 1]}, $dateText',
+                ),
+              ),
+              const SizedBox(width: 10),
+              navBtn(
+                Icons.chevron_right_rounded,
+                _isToday ? null : () => _setDate(_date.add(const Duration(days: 1))),
+              ),
             ],
           ),
         ],
       );
     }
 
+    // ---------- web / tablet ----------
     final controls = Wrap(
       spacing: 10,
       runSpacing: 10,
       crossAxisAlignment: WrapCrossAlignment.center,
-      children: [prev, dateButton, next, if (!_isToday) todayBtn],
+      children: [
+        navBtn(Icons.chevron_left_rounded, () => _setDate(_date.subtract(const Duration(days: 1)))),
+        dateButton(expand: false, label: dateText),
+        navBtn(
+          Icons.chevron_right_rounded,
+          _isToday ? null : () => _setDate(_date.add(const Duration(days: 1))),
+        ),
+        if (!_isToday) todayChip,
+      ],
     );
 
-    return LayoutBuilder(
-      builder: (context, c) {
-        if (c.maxWidth < 700) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [title, const SizedBox(height: 14), controls],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [title, controls],
-        );
-      },
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [titleBlock, controls],
     );
   }
 
@@ -442,7 +422,6 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
 
   Widget _content() {
     final rows = _rows();
-    final compact = _compact;
 
     if (rows.isEmpty) {
       return const Padding(
@@ -453,45 +432,43 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
       );
     }
 
-    final visible = (_showAll || rows.length <= _collapsedRows) ? rows : rows.take(_collapsedRows).toList();
+    return LayoutBuilder(
+      builder: (context, c) {
+        final wide = c.maxWidth >= 760;
+        final limit = wide ? _collapsedRows : 5; // phones show fewer rows
+        final visible = (_showAll || rows.length <= limit) ? rows : rows.take(limit).toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: compact
-              ? const EdgeInsets.fromLTRB(14, 12, 14, 12)
-              : const EdgeInsets.fromLTRB(24, 6, 24, 16),
-          child: _summary(rows),
-        ),
-        LayoutBuilder(
-          builder: (context, c) {
-            final wide = c.maxWidth >= 760;
-            final side = wide ? 24.0 : (compact ? 10.0 : 14.0);
-            return Padding(
-              padding: EdgeInsets.fromLTRB(side, 0, side, 6),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(wide ? 24 : 14, 6, wide ? 24 : 14, 14),
+              child: _summary(rows, wide: wide),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(wide ? 24 : 12, 0, wide ? 24 : 12, 6),
               child: wide
                   ? ClipRRect(borderRadius: BorderRadius.circular(8), child: _table(visible))
                   : Column(children: [for (final r in visible) _compactCard(r)]),
-            );
-          },
-        ),
-        if (rows.length > _collapsedRows)
-          Padding(
-            padding: EdgeInsets.fromLTRB(24, 0, 24, compact ? 8 : 18),
-            child: Center(
-              child: TextButton(
-                onPressed: () => setState(() => _showAll = !_showAll),
-                child: Text(
-                  _showAll ? 'Show less' : 'Show all (${rows.length})',
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: AdminEmpColors.primary),
-                ),
-              ),
             ),
-          )
-        else
-          SizedBox(height: compact ? 8 : 16),
-      ],
+            if (rows.length > limit)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 2, 24, 14),
+                child: Center(
+                  child: TextButton(
+                    onPressed: () => setState(() => _showAll = !_showAll),
+                    child: Text(
+                      _showAll ? 'Show less' : 'Show all (${rows.length})',
+                      style: const TextStyle(fontWeight: FontWeight.w700, color: AdminEmpColors.primary),
+                    ),
+                  ),
+                ),
+              )
+            else
+              const SizedBox(height: 10),
+          ],
+        );
+      },
     );
   }
 
@@ -499,88 +476,11 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
   // summary chips
   // ------------------------------------------------------------
 
-  Widget _summary(List<_Row> rows) {
+  Widget _summary(List<_Row> rows, {required bool wide}) {
     int count(bool Function(String) t) => rows.where((r) => t(_statusKey(r.record))).length;
 
-    final stats = <_Stat>[
-      if (_isToday)
-        _Stat('Working now', 'Working', rows.where((r) => _isWorking(r.record)).length, AdminEmpColors.primary),
-      _Stat('Present', 'Present', count((s) => s == 'present' || s == 'late' || s == 'half_day'), const Color(0xFF22C55E)),
-      _Stat('Late', 'Late', count((s) => s == 'late'), const Color(0xFFF59E0B)),
-      _Stat('Absent', 'Absent', count((s) => s == 'absent'), const Color(0xFFEF4444)),
-      _Stat('On Leave', 'On Leave', count((s) => s == 'on_leave' || s == 'leave'), const Color(0xFF8B5CF6)),
-      _Stat(
-        _isToday ? 'Not checked in' : 'No record',
-        _isToday ? 'Not in' : 'No record',
-        count((s) => s == 'not_checked_in' || s == 'no_record'),
-        const Color(0xFF9CA3AF),
-      ),
-    ];
-
-    // PHONE: 3 small tiles per row  (value on top, label below)
-    if (_compact) {
-      return LayoutBuilder(
-        builder: (context, c) {
-          const gap = 8.0;
-          final w = (c.maxWidth - gap * 2) / 3;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: [
-              for (final s in stats)
-                SizedBox(
-                  width: w,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFAFAFB),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFEDEFF3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${s.value}',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            height: 1.1,
-                            color: AdminEmpColors.text,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(color: s.color, shape: BoxShape.circle),
-                            ),
-                            const SizedBox(width: 5),
-                            Expanded(
-                              child: Text(
-                                s.shortLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 11.5, color: AdminEmpColors.muted),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
-      );
-    }
-
-    // WEB / TABLET: same chips as before
-    Widget chip(_Stat s) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+    Widget chip(String label, int value, Color dot) => Container(
+      padding: EdgeInsets.symmetric(horizontal: wide ? 14 : 11, vertical: wide ? 9 : 7),
       decoration: BoxDecoration(
         color: const Color(0xFFFAFAFB),
         borderRadius: BorderRadius.circular(10),
@@ -589,16 +489,49 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: s.color, shape: BoxShape.circle)),
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+          const SizedBox(width: 7),
+          Text(label, style: TextStyle(fontSize: wide ? 13 : 12, color: AdminEmpColors.muted)),
           const SizedBox(width: 8),
-          Text(s.label, style: const TextStyle(fontSize: 13, color: AdminEmpColors.muted)),
-          const SizedBox(width: 10),
-          Text('${s.value}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AdminEmpColors.text)),
+          Text(
+            '$value',
+            style: TextStyle(
+              fontSize: wide ? 15 : 14,
+              fontWeight: FontWeight.w800,
+              color: AdminEmpColors.text,
+            ),
+          ),
         ],
       ),
     );
 
-    return Wrap(spacing: 10, runSpacing: 10, children: [for (final s in stats) chip(s)]);
+    final working = rows.where((r) => _isWorking(r.record)).length;
+
+    final chips = <Widget>[
+      if (_isToday) chip('Working now', working, AdminEmpColors.primary),
+      chip('Present', count((s) => s == 'present' || s == 'late' || s == 'half_day'), const Color(0xFF22C55E)),
+      chip('Late', count((s) => s == 'late'), const Color(0xFFF59E0B)),
+      chip('Absent', count((s) => s == 'absent'), const Color(0xFFEF4444)),
+      chip('On Leave', count((s) => s == 'on_leave' || s == 'leave'), const Color(0xFF8B5CF6)),
+      chip(_isToday ? 'Not checked in' : 'No record', count((s) => s == 'not_checked_in' || s == 'no_record'), const Color(0xFF9CA3AF)),
+    ];
+
+    if (wide) {
+      return Wrap(spacing: 10, runSpacing: 10, children: chips);
+    }
+
+    // phone: ONE row that scrolls sideways (instead of 3 lines of chips)
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (var i = 0; i < chips.length; i++) ...[
+            if (i != 0) const SizedBox(width: 8),
+            chips[i],
+          ],
+        ],
+      ),
+    );
   }
 
   // ------------------------------------------------------------
@@ -771,56 +704,51 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
+        color: Colors.white,
         border: Border.all(color: AdminEmpColors.border),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: AdminEmpColors.primarySoft,
-                child: Text(
-                  e.initials,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AdminEmpColors.primary),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      e.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AdminEmpColors.text),
-                    ),
-                    Text(
-                      '${e.employeeCode}  •  ${adminProfOrDash(e.department)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11.5, color: AdminEmpColors.muted),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              _statusPill(_statusKey(rec)),
-            ],
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: AdminEmpColors.primarySoft,
+            child: Text(
+              e.initials,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AdminEmpColors.primary),
+            ),
           ),
-          const SizedBox(height: 8),
-          const Divider(height: 1, color: Color(0xFFF1F2F4)),
-          const SizedBox(height: 8),
-          Row(
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  e.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AdminEmpColors.text),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'In ${adminProfTime(rec?.checkIn)}  ·  Out ${adminProfTime(rec?.checkOut)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AdminEmpColors.muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Expanded(child: _mini('CHECK-IN', adminProfTime(rec?.checkIn))),
-              Expanded(child: _mini('CHECK-OUT', adminProfTime(rec?.checkOut))),
-              Expanded(child: _miniWidget('TOTAL', _hoursCell(r))),
+              _hoursCell(r),
+              const SizedBox(height: 5),
+              _statusPill(_statusKey(rec), small: true),
             ],
           ),
         ],
@@ -828,35 +756,11 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
     );
   }
 
-  Widget _mini(String label, String value) => _miniWidget(
-    label,
-    Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AdminEmpColors.text)),
-  );
-
-  Widget _miniWidget(String label, Widget child) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-            color: AdminEmpColors.muted,
-          ),
-        ),
-        const SizedBox(height: 2),
-        child,
-      ],
-    );
-  }
-
   // ------------------------------------------------------------
   // status pill
   // ------------------------------------------------------------
 
-  Widget _statusPill(String key) {
+  Widget _statusPill(String key, {bool small = false}) {
     Color fg;
     Color bg;
     String label;
@@ -909,14 +813,10 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
         label = key == 'no_record' ? 'No record' : adminProfTitle(key);
     }
 
-    final compact = _compact;
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 11, vertical: compact ? 4 : 5),
+      padding: EdgeInsets.symmetric(horizontal: small ? 9 : 11, vertical: small ? 3 : 5),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: compact ? 11 : 12, fontWeight: FontWeight.w700, color: fg),
-      ),
+      child: Text(label, style: TextStyle(fontSize: small ? 11 : 12, fontWeight: FontWeight.w700, color: fg)),
     );
   }
 }
@@ -925,12 +825,4 @@ class _Row {
   final AdminEmployeeModel employee;
   final AdminDailyAttendance? record;
   const _Row(this.employee, this.record);
-}
-
-class _Stat {
-  final String label;
-  final String shortLabel;
-  final int value;
-  final Color color;
-  const _Stat(this.label, this.shortLabel, this.value, this.color);
 }

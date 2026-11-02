@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../employees/widgets/admin_employee_theme.dart';
 
 /// ACTIVE EMPLOYEES (orange, "5 / 10") | PENDING LEAVES | PENDING EXPENSES | ARCHIVED EMPLOYEES
+/// 4 in a row on web, 2 x 2 on phones (smaller text, nothing is cut).
 class AdminOverviewStatCards extends StatelessWidget {
   final String activeValue;
   final int pendingLeaves;
@@ -22,17 +23,15 @@ class AdminOverviewStatCards extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, c) {
         final wide = c.maxWidth >= 900;
-        final compact = c.maxWidth < 600;
-
         final cols = wide ? 4 : 2;
-        final gap = wide ? 18.0 : (compact ? 10.0 : 12.0);
+        final gap = wide ? 18.0 : 12.0;
         final w = (c.maxWidth - gap * (cols - 1)) / cols;
 
         final cards = <Widget>[
-          _card('ACTIVE EMPLOYEES', 'ACTIVE', activeValue, compact, highlighted: true),
-          _card('PENDING LEAVES', 'PENDING LEAVES', '$pendingLeaves', compact),
-          _card('PENDING EXPENSES', 'PENDING EXPENSES', '$pendingExpenses', compact),
-          _card('ARCHIVED EMPLOYEES', 'ARCHIVED', '$archived', compact),
+          _card('ACTIVE EMPLOYEES', activeValue, wide, highlighted: true),
+          _card('PENDING LEAVES', '$pendingLeaves', wide),
+          _card('PENDING EXPENSES', '$pendingExpenses', wide),
+          _card('ARCHIVED EMPLOYEES', '$archived', wide),
         ];
 
         return Wrap(
@@ -44,19 +43,13 @@ class AdminOverviewStatCards extends StatelessWidget {
     );
   }
 
-  Widget _card(
-      String label,
-      String shortLabel,
-      String value,
-      bool compact, {
-        bool highlighted = false,
-      }) {
+  Widget _card(String label, String value, bool wide, {bool highlighted = false}) {
     final fg = highlighted ? Colors.white : AdminEmpColors.text;
 
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(compact ? 12 : 14),
+        borderRadius: BorderRadius.circular(wide ? 14 : 12),
         color: highlighted ? null : Colors.white,
         gradient: highlighted
             ? const LinearGradient(
@@ -69,55 +62,56 @@ class AdminOverviewStatCards extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: highlighted ? const Color(0x33E96832) : const Color(0x0A000000),
-            blurRadius: highlighted ? (compact ? 10 : 16) : (compact ? 6 : 10),
-            offset: Offset(0, compact ? 3 : 5),
+            blurRadius: highlighted ? 14 : 8,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Stack(
         children: [
-          // building watermark (like the web)
+          // building watermark (smaller + lighter on phones so it never covers the number)
           if (highlighted)
             Positioned(
-              right: compact ? -4 : -6,
-              bottom: compact ? -10 : -14,
+              right: wide ? -6 : -10,
+              bottom: wide ? -14 : -12,
               child: Icon(
                 Icons.apartment_rounded,
-                size: compact ? 62 : 104,
-                color: Colors.white.withOpacity(0.16),
+                size: wide ? 104 : 58,
+                color: Colors.white.withOpacity(wide ? 0.16 : 0.12),
               ),
             ),
           Padding(
-            padding: compact
-                ? const EdgeInsets.fromLTRB(14, 12, 14, 12)
-                : const EdgeInsets.fromLTRB(24, 20, 24, 20),
+            padding: EdgeInsets.fromLTRB(wide ? 24 : 14, wide ? 20 : 14, wide ? 24 : 12, wide ? 20 : 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                // FittedBox: a long label shrinks instead of showing "..."
+                // FittedBox: a long label shrinks instead of showing "EMPLOY…"
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    compact ? shortLabel : label,
+                    label,
                     maxLines: 1,
                     style: TextStyle(
-                      fontSize: compact ? 10.5 : 12,
+                      fontSize: wide ? 12 : 11,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: compact ? 0.5 : 0.8,
+                      letterSpacing: wide ? 0.8 : 0.5,
                       color: highlighted ? Colors.white : AdminEmpColors.muted,
                     ),
                   ),
                 ),
-                SizedBox(height: compact ? 4 : 10),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: compact ? 24 : 34,
-                    fontWeight: FontWeight.w800,
-                    height: 1.1,
-                    color: fg,
+                SizedBox(height: wide ? 10 : 6),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: wide ? 34 : 27,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                      color: fg,
+                    ),
                   ),
                 ),
               ],
