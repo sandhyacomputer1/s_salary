@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/admin_employee_access.dart';
 import '../models/admin_employee_model.dart';
 import 'admin_employee_actions.dart';
 import 'admin_employee_status_chip.dart';
@@ -7,9 +8,13 @@ import 'admin_employee_work_mode_chip.dart';
 
 /// Desktop / web table:
 /// EMPLOYEE | CODE | DEPARTMENT | WORK MODE | JOINING | STATUS | SALARY | actions
+///
+/// PERMISSION: [access] hides the salary column and the actions this role
+/// may not use. With full access it looks exactly as before.
 class AdminEmployeeTable extends StatelessWidget {
   final List<AdminEmployeeModel> employees;
   final bool archived;
+  final AdminEmployeeAccess access;
 
   final void Function(AdminEmployeeModel) onAccess;
   final void Function(AdminEmployeeModel) onSalary;
@@ -28,9 +33,14 @@ class AdminEmployeeTable extends StatelessWidget {
     required this.onArchive,
     required this.onRestore,
     required this.onDeleteForever,
+    this.access = AdminEmployeeAccess.full,
   });
 
   static const double _actionsWidth = 190;
+
+  /// Archived rows only have restore / delete, so without delete rights
+  /// there is nothing to show in the actions column.
+  bool get _hasActions => !archived || access.canDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -56,16 +66,17 @@ class AdminEmployeeTable extends StatelessWidget {
     return Container(
       color: AdminEmpColors.headerBg,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: const Row(
+      child: Row(
         children: [
-          Expanded(flex: 30, child: Text('EMPLOYEE', style: style)),
-          Expanded(flex: 13, child: Text('CODE', style: style)),
-          Expanded(flex: 15, child: Text('DEPARTMENT', style: style)),
-          Expanded(flex: 13, child: Text('WORK MODE', style: style)),
-          Expanded(flex: 14, child: Text('JOINING', style: style)),
-          Expanded(flex: 12, child: Text('STATUS', style: style)),
-          Expanded(flex: 12, child: Text('SALARY', style: style)),
-          SizedBox(width: _actionsWidth),
+          const Expanded(flex: 30, child: Text('EMPLOYEE', style: style)),
+          const Expanded(flex: 13, child: Text('CODE', style: style)),
+          const Expanded(flex: 15, child: Text('DEPARTMENT', style: style)),
+          const Expanded(flex: 13, child: Text('WORK MODE', style: style)),
+          const Expanded(flex: 14, child: Text('JOINING', style: style)),
+          const Expanded(flex: 12, child: Text('STATUS', style: style)),
+          if (access.canSeeSalary)
+            const Expanded(flex: 12, child: Text('SALARY', style: style)),
+          if (_hasActions) const SizedBox(width: _actionsWidth),
         ],
       ),
     );
@@ -145,27 +156,104 @@ class AdminEmployeeTable extends StatelessWidget {
               child: AdminEmployeeStatusChip(status: e.status),
             ),
           ),
-          Expanded(
-            flex: 12,
-            child: Text(e.salaryLabel, style: cell.copyWith(fontWeight: FontWeight.w700)),
-          ),
-          SizedBox(
-            width: _actionsWidth,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: AdminEmployeeActions(
-                employee: e,
-                archived: archived,
-                onAccess: () => onAccess(e),
-                onSalary: () => onSalary(e),
-                onProfile: () => onProfile(e),
-                onArchive: () => onArchive(e),
-                onRestore: () => onRestore(e),
-                onDeleteForever: () => onDeleteForever(e),
+          if (access.canSeeSalary)
+            Expanded(
+              flex: 12,
+              child: Text(e.salaryLabel, style: cell.copyWith(fontWeight: FontWeight.w700)),
+            ),
+          if (_hasActions)
+            SizedBox(
+              width: _actionsWidth,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: _actions(e),
               ),
             ),
-          ),
         ],
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------
+  // actions
+  // ------------------------------------------------------------
+
+  Widget _actions(AdminEmployeeModel e) {
+    // full access: the original action buttons, unchanged
+    if (access.isFull) {
+      return AdminEmployeeActions(
+        employee: e,
+        archived: archived,
+        onAccess: () => onAccess(e),
+        onSalary: () => onSalary(e),
+        onProfile: () => onProfile(e),
+        onArchive: () => onArchive(e),
+        onRestore: () => onRestore(e),
+        onDeleteForever: () => onDeleteForever(e),
+      );
+    }
+
+    // limited access: only the buttons this role may use
+    final buttons = <Widget>[];
+
+    if (archived) {
+      if (access.canDelete) {
+        buttons.add(_iconButton(Icons.restore_rounded, 'Restore', () => onRestore(e)));
+        buttons.add(_iconButton(Icons.delete_forever_outlined, 'Delete permanently',
+                () => onDeleteForever(e), danger: true));
+      }
+    } else {
+      if (access.canEdit) {
+        buttons.add(_iconButton(Icons.lock_outline_rounded, 'Access & credentials',
+                () => onAccess(e)));
+      }
+      if (access.canManageSalary) {
+        buttons.add(_iconButton(Icons.currency_rupee_rounded, 'Set salary',
+                () => onSalary(e)));
+      }
+      buttons.add(_iconButton(Icons.person_outline_rounded, 'View profile',
+              () => onProfile(e)));
+      if (access.canDelete) {
+        buttons.add(_iconButton(Icons.delete_outline_rounded, 'Archive',
+                () => onArchive(e), danger: true));
+      }
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < buttons.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          buttons[i],
+        ],
+      ],
+    );
+  }
+
+  Widget _iconButton(
+      IconData icon,
+      String tooltip,
+      VoidCallback onTap, {
+        bool danger = false,
+      }) {
+    final color = danger ? AdminEmpColors.danger : AdminEmpColors.text;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: const BorderSide(color: AdminEmpColors.border),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: SizedBox(
+            width: 38,
+            height: 38,
+            child: Icon(icon, size: 19, color: color),
+          ),
+        ),
       ),
     );
   }

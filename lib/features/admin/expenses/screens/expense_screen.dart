@@ -9,9 +9,14 @@ class ExpenseScreen extends StatefulWidget {
   /// True when shown inside the admin dashboard (the sidebar stays visible).
   final bool embedded;
 
+  /// PERMISSION: false = view only (no Approve / Reject anywhere on this
+  /// screen or in the details page). The default is true (the old behaviour).
+  final bool canManage;
+
   const ExpenseScreen({
     super.key,
     this.embedded = false,
+    this.canManage = true,
   });
 
   @override
@@ -114,6 +119,8 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       _expenses.fold(0, (sum, expense) => sum + expense.amount);
 
   Future<bool> _approveExpense(ExpenseModel expense) async {
+    if (!widget.canManage) return false; // PERMISSION
+
     try {
       await _service.approveExpense(expense.id);
 
@@ -162,6 +169,8 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   }
 
   Future<bool> _rejectExpense(ExpenseModel expense) async {
+    if (!widget.canManage) return false; // PERMISSION
+
     final confirmed = await _confirmReject(expense);
 
     if (!confirmed || !mounted) return false;
@@ -193,8 +202,9 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       MaterialPageRoute(
         builder: (_) => ExpenseDetailsScreen(
           expense: expense,
-          onApprove: () => _approveExpense(expense),
-          onReject: () => _rejectExpense(expense),
+          // PERMISSION: no actions at all for a view-only role
+          onApprove: widget.canManage ? () => _approveExpense(expense) : null,
+          onReject: widget.canManage ? () => _rejectExpense(expense) : null,
         ),
       ),
     );
@@ -312,25 +322,52 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'Expense Management',
                 style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
                     color: textDark),
               ),
-              SizedBox(height: 5),
+              const SizedBox(height: 5),
               Text(
-                'Review and manage employee expense claims.',
-                style: TextStyle(fontSize: 13, color: textMedium),
+                widget.canManage
+                    ? 'Review and manage employee expense claims.'
+                    : 'View employee expense claims.',
+                style: const TextStyle(fontSize: 13, color: textMedium),
               ),
             ],
           ),
         ),
+        // PERMISSION: tells a view-only role why there are no buttons
+        if (!widget.canManage)
+          Container(
+            margin: const EdgeInsets.only(left: 12, top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F2F4),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.visibility_outlined, size: 14, color: textLight),
+                SizedBox(width: 5),
+                Text(
+                  'View only',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: textMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -514,10 +551,14 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
             expense: expenses[i],
             index: i,
             onTap: () => _openDetails(expenses[i]),
-            onApprove: expenses[i].status.toLowerCase() == 'pending'
+            // PERMISSION: Approve / Reject only for pending expenses AND
+            // only for roles that may manage expenses
+            onApprove: widget.canManage &&
+                expenses[i].status.toLowerCase() == 'pending'
                 ? () => _approveExpense(expenses[i])
                 : null,
-            onReject: expenses[i].status.toLowerCase() == 'pending'
+            onReject: widget.canManage &&
+                expenses[i].status.toLowerCase() == 'pending'
                 ? () => _rejectExpense(expenses[i])
                 : null,
           ),

@@ -1,3 +1,5 @@
+// lib/features/employee/dashboard/screens/emp_dashboard_screen.dart
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -159,7 +161,14 @@ class _EmpDashboardScreenState extends State<EmpDashboardScreen>
       // If we already know the employee id (cache), attendance does not
       // have to wait for the profile.
       final profileFuture = _service.getProfile();
-      final shiftFuture = _service.getMyShift();
+
+      // The shift is OPTIONAL: some roles (for example an Accountant who
+      // opens this from the admin dashboard) are not allowed to read it.
+      // A missing shift must never block check-in / check-out.
+      final Future<EmpDashShiftModel?> shiftFuture = _service
+          .getMyShift()
+          .then<EmpDashShiftModel?>((s) => s)
+          .catchError((Object _) => null);
 
       final cachedId = _EmpDashCache.profile?.id;
       final Future<List<EmpDashAttendanceRecord>> attendanceFuture =
@@ -177,14 +186,14 @@ class _EmpDashboardScreenState extends State<EmpDashboardScreen>
         ),
       );
 
-      final results = await Future.wait<Object>([
+      final results = await Future.wait<Object?>([
         profileFuture,
         shiftFuture,
         attendanceFuture,
       ]);
 
       final profile = results[0] as EmpDashProfileModel;
-      final shift = results[1] as EmpDashShiftModel;
+      final shift = results[1] as EmpDashShiftModel?;
       final attendance = results[2] as List<EmpDashAttendanceRecord>;
 
       _EmpDashCache.profile = profile;

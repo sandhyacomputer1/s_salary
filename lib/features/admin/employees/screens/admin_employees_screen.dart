@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/storage/secure_storage.dart'; // TODO: fix path if different
+import '../models/admin_employee_access.dart';
 import '../models/admin_employee_model.dart';
 import 'admin_employee_profile_screen.dart';
 import '../services/admin_csv_download.dart';
@@ -17,16 +18,23 @@ import '../widgets/admin_salary_dialog.dart';
 
 /// Employee Directory: Active / Archive tabs + Add Employee dialog.
 /// Use `embedded: true` when it is shown inside the dashboard shell.
+///
+/// PERMISSION: [access] decides which buttons / actions / columns / profile
+/// tabs this role gets. The default is full access (the old behaviour).
 class AdminEmployeesScreen extends StatefulWidget {
   final bool embedded;
 
   /// Opens this employee's profile right away (used by the dashboard overview).
   final AdminEmployeeModel? initialProfile;
 
+  /// PERMISSION: what the logged-in person may do here.
+  final AdminEmployeeAccess access;
+
   const AdminEmployeesScreen({
     super.key,
     this.embedded = false,
     this.initialProfile,
+    this.access = AdminEmployeeAccess.full,
   });
 
   @override
@@ -35,6 +43,8 @@ class AdminEmployeesScreen extends StatefulWidget {
 
 class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
   final AdminEmployeeService _service = AdminEmployeeService();
+
+  AdminEmployeeAccess get _access => widget.access;
 
   int _tab = 0; // 0 = Active, 1 = Archive
   bool _loading = true;
@@ -55,6 +65,14 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
     _load();
   }
 
+  /// PERMISSION: if the allowed actions change, load again (salary is only
+  /// fetched when this role may see it).
+  @override
+  void didUpdateWidget(covariant AdminEmployeesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.access != widget.access) _load(silent: true);
+  }
+
   // ------------------------------------------------------------
   // data
   // ------------------------------------------------------------
@@ -72,19 +90,29 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
         _companyId = (await SecureStorage.getCompanyId()) ?? '';
       }
 
-      final results = await Future.wait([
+      // PERMISSION: salary is only fetched for roles that may see it
+      final seeSalary = _access.canSeeSalary && _companyId.isNotEmpty;
+
+      final Future<Map<String, double>> salaryFuture = seeSalary
+          ? _service.getSalaryMap(_companyId)
+          : Future.value(<String, double>{});
+      final Future<List<String>> departmentsFuture = _companyId.isNotEmpty
+          ? _service.getDepartments(_companyId)
+          : Future.value(_departments);
+
+      final results = await Future.wait<Object>([
         _service.getActiveEmployees(),
         _service.getArchivedEmployees(),
-        if (_companyId.isNotEmpty) _service.getSalaryMap(_companyId),
-        if (_companyId.isNotEmpty) _service.getDepartments(_companyId),
+        salaryFuture,
+        departmentsFuture,
       ]);
 
       var active = results[0] as List<AdminEmployeeModel>;
       var archived = results[1] as List<AdminEmployeeModel>;
+      final salary = results[2] as Map<String, double>;
+      _departments = results[3] as List<String>;
 
-      if (_companyId.isNotEmpty) {
-        final salary = results[2] as Map<String, double>;
-        _departments = results[3] as List<String>;
+      if (seeSalary) {
         active = active.map((e) => e.copyWith(baseSalary: salary[e.id])).toList();
         archived = archived.map((e) => e.copyWith(baseSalary: salary[e.id])).toList();
       }
@@ -120,6 +148,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
   }
 
   Future<void> _openAdd() async {
+    if (!_access.canCreate) return; // PERMISSION
     final created = await AdminAddEmployeeDialog.show(
       context,
       service: _service,
@@ -143,6 +172,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
   }
 
   Future<void> _openBulkImport() async {
+    if (!_access.canCreate) return; // PERMISSION
     final imported = await AdminBulkImportDialog.show(
       context,
       service: _service,
@@ -211,6 +241,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
   }
 
   Future<void> _archive(AdminEmployeeModel e) async {
+    if (!_access.canDelete) return; // PERMISSION
     final ok = await _confirm(
       title: 'Archive employee?',
       message: '${e.name} will be moved to the Archive tab. You can restore later.',
@@ -220,6 +251,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
   }
 
   Future<void> _restore(AdminEmployeeModel e) async {
+    if (!_access.canDelete) return; // PERMISSION
     final ok = await _confirm(
       title: 'Restore employee?',
       message: '${e.name} will become active again.',
@@ -230,6 +262,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
   }
 
   Future<void> _deleteForever(AdminEmployeeModel e) async {
+    if (!_access.canDelete) return; // PERMISSION
     final ok = await _confirm(
       title: 'Delete permanently?',
       message: '${e.name} and all related data will be deleted. This cannot be undone.',
@@ -239,6 +272,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
   }
 
   Future<void> _openAccess(AdminEmployeeModel e) async {
+    if (!_access.canEdit) return; // PERMISSION
     final saved = await AdminAccessDialog.show(context, service: _service, employee: e);
     if (saved == true) {
       if (!mounted) return;
@@ -248,6 +282,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
   }
 
   Future<void> _openSalary(AdminEmployeeModel e) async {
+    if (!_access.canManageSalary) return; // PERMISSION
     final saved = await AdminSalaryDialog.show(context, service: _service, employee: e);
     if (saved == true) {
       if (!mounted) return;
@@ -263,7 +298,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
       setState(() => _profile = e);
       return;
     }
-    await AdminEmployeeProfileScreen.open(context, e);
+    await AdminEmployeeProfileScreen.open(context, e, access: _access);
     if (mounted) _load(silent: true);
   }
 
@@ -291,6 +326,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
           employee: profile,
           embedded: true,
           onBack: _closeProfile,
+          access: _access, // PERMISSION
         ),
       );
     }
@@ -365,27 +401,51 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
 
     // ------------------------------------------------------------
     // Horizontal Buttons (Export CSV / Bulk Import / + Add Employee)
+    // PERMISSION: Bulk Import and Add Employee need create rights.
     // ------------------------------------------------------------
+    final exportButton = OutlinedButton(
+      onPressed: _exportCsv,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 40),
+        foregroundColor: AdminEmpColors.text,
+        side: const BorderSide(color: AdminEmpColors.border),
+        padding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: const Text(
+        'Export CSV',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+      ),
+    );
+
+    // view-only: just the Export CSV button
+    if (!_access.canCreate) {
+      final single = SizedBox(width: 140, child: exportButton);
+      return LayoutBuilder(
+        builder: (context, c) {
+          if (c.maxWidth < 620) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                title,
+                const SizedBox(height: 14),
+                single,
+              ],
+            );
+          }
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [title, single],
+          );
+        },
+      );
+    }
+
     final actions = Row(
       children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: _exportCsv,
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 40),
-              foregroundColor: AdminEmpColors.text,
-              side: const BorderSide(color: AdminEmpColors.border),
-              padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text(
-              'Export CSV',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ),
+        Expanded(child: exportButton),
         const SizedBox(width: 8),
         Expanded(
           child: OutlinedButton(
@@ -497,6 +557,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
           return AdminEmployeeTable(
             employees: list,
             archived: archived,
+            access: _access,
             onAccess: _openAccess,
             onSalary: _openSalary,
             onProfile: _openProfile,
@@ -514,6 +575,7 @@ class _AdminEmployeesScreenState extends State<AdminEmployeesScreen> {
                 AdminEmployeeCard(
                   employee: e,
                   archived: archived,
+                  access: _access,
                   onAccess: () => _openAccess(e),
                   onSalary: () => _openSalary(e),
                   onProfile: () => _openProfile(e),

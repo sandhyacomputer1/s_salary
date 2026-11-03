@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/admin_employee_access.dart';
 import '../models/admin_employee_model.dart';
 import '../models/admin_employee_profile_models.dart';
 import '../services/admin_employee_profile_service.dart';
@@ -17,6 +18,10 @@ import '../widgets/admin_profile_tab_bar.dart';
 
 /// Full employee profile (opened from the person icon in the directory).
 /// Tabs: Overview | Attendance & Logs | Personal | Leave | Salary | Expenses
+///
+/// PERMISSION: [access] locks the tabs this role may not open (Attendance,
+/// Leave, Salary, Expenses). A locked tab shows a "no access" panel instead
+/// of the data. With full access it behaves exactly as before.
 class AdminEmployeeProfileScreen extends StatefulWidget {
   final AdminEmployeeModel employee;
 
@@ -25,16 +30,26 @@ class AdminEmployeeProfileScreen extends StatefulWidget {
   final bool embedded;
   final VoidCallback? onBack;
 
+  /// PERMISSION: what the logged-in person may see.
+  final AdminEmployeeAccess access;
+
   const AdminEmployeeProfileScreen({
     super.key,
     required this.employee,
     this.embedded = false,
     this.onBack,
+    this.access = AdminEmployeeAccess.full,
   });
 
-  static Future<void> open(BuildContext context, AdminEmployeeModel employee) {
+  static Future<void> open(
+      BuildContext context,
+      AdminEmployeeModel employee, {
+        AdminEmployeeAccess access = AdminEmployeeAccess.full,
+      }) {
     return Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => AdminEmployeeProfileScreen(employee: employee)),
+      MaterialPageRoute(
+        builder: (_) => AdminEmployeeProfileScreen(employee: employee, access: access),
+      ),
     );
   }
 
@@ -44,6 +59,8 @@ class AdminEmployeeProfileScreen extends StatefulWidget {
 
 class _AdminEmployeeProfileScreenState extends State<AdminEmployeeProfileScreen> {
   final AdminEmployeeProfileService _service = AdminEmployeeProfileService();
+
+  AdminEmployeeAccess get _access => widget.access;
 
   int _tab = 0;
   int _reloadKey = 0;
@@ -239,17 +256,58 @@ class _AdminEmployeeProfileScreenState extends State<AdminEmployeeProfileScreen>
     );
   }
 
+  /// PERMISSION: shown in place of a tab this role may not open.
+  Widget _locked(String what) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 52),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AdminEmpColors.border),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AdminEmpColors.primarySoft,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(Icons.lock_outline_rounded, color: AdminEmpColors.primary, size: 28),
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'No access',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AdminEmpColors.text),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Your role does not have permission to view $what information.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 14, color: AdminEmpColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _tabBody() {
     switch (_tab) {
       case 1:
+        if (!_access.canSeeAttendance) return _locked('attendance');
         return AdminProfileAttendanceTab(employee: widget.employee, service: _service);
       case 2:
         return AdminProfilePersonalTab(employee: widget.employee);
       case 3:
+        if (!_access.canSeeLeaves) return _locked('leave');
         return AdminProfileLeaveTab(employee: widget.employee, service: _service);
       case 4:
+        if (!_access.canSeeSalary) return _locked('salary');
         return AdminProfileSalaryTab(employee: widget.employee, service: _service);
       case 5:
+        if (!_access.canSeeExpenses) return _locked('expense');
         return AdminProfileExpensesTab(employee: widget.employee, service: _service);
       default:
         return AdminProfileOverviewTab(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/admin_employee_access.dart';
 import '../models/admin_employee_model.dart';
 import 'admin_employee_status_chip.dart';
 import 'admin_employee_theme.dart';
@@ -11,9 +12,13 @@ import 'admin_employee_theme.dart';
 ///
 /// Only the key info is shown. Everything else is in the profile, and the
 /// actions are inside the ⋮ menu.
+///
+/// PERMISSION: [access] hides the salary and the menu actions this role may
+/// not use. With full access it looks exactly as before.
 class AdminEmployeeCard extends StatelessWidget {
   final AdminEmployeeModel employee;
   final bool archived;
+  final AdminEmployeeAccess access;
 
   final VoidCallback onAccess;
   final VoidCallback onSalary;
@@ -32,6 +37,7 @@ class AdminEmployeeCard extends StatelessWidget {
     required this.onArchive,
     required this.onRestore,
     required this.onDeleteForever,
+    this.access = AdminEmployeeAccess.full,
   });
 
   @override
@@ -41,6 +47,9 @@ class AdminEmployeeCard extends StatelessWidget {
       if (e.employeeCode.isNotEmpty) e.employeeCode,
       if (e.department.isNotEmpty) e.department,
     ].join(' · ');
+
+    final items = _menuItems();
+    final hasMenu = items.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -55,7 +64,7 @@ class AdminEmployeeCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           onTap: archived ? null : onProfile,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 11, 2, 11),
+            padding: EdgeInsets.fromLTRB(12, 11, hasMenu ? 2 : 12, 11),
             child: Row(
               children: [
                 CircleAvatar(
@@ -100,19 +109,21 @@ class AdminEmployeeCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
-                      e.salaryLabel,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: AdminEmpColors.text,
+                    if (access.canSeeSalary) ...[
+                      Text(
+                        e.salaryLabel,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AdminEmpColors.text,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 5),
+                      const SizedBox(height: 5),
+                    ],
                     AdminEmployeeStatusChip(status: e.status),
                   ],
                 ),
-                _menu(),
+                if (hasMenu) _menu(items),
               ],
             ),
           ),
@@ -121,34 +132,44 @@ class AdminEmployeeCard extends StatelessWidget {
     );
   }
 
-  Widget _menu() {
-    PopupMenuItem<String> item(String value, IconData icon, String label, {bool danger = false}) {
-      final color = danger ? AdminEmpColors.danger : AdminEmpColors.text;
-      return PopupMenuItem<String>(
-        value: value,
-        child: Row(
-          children: [
-            Icon(icon, size: 19, color: color),
-            const SizedBox(width: 12),
-            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color)),
-          ],
-        ),
-      );
+  PopupMenuItem<String> _item(String value, IconData icon, String label, {bool danger = false}) {
+    final color = danger ? AdminEmpColors.danger : AdminEmpColors.text;
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 19, color: color),
+          const SizedBox(width: 12),
+          Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color)),
+        ],
+      ),
+    );
+  }
+
+  /// PERMISSION: only the actions this role may use.
+  List<PopupMenuEntry<String>> _menuItems() {
+    if (archived) {
+      if (!access.canDelete) return const [];
+      return [
+        _item('restore', Icons.restore_rounded, 'Restore'),
+        _item('delete', Icons.delete_forever_outlined, 'Delete permanently', danger: true),
+      ];
     }
 
-    final items = archived
-        ? <PopupMenuEntry<String>>[
-      item('restore', Icons.restore_rounded, 'Restore'),
-      item('delete', Icons.delete_forever_outlined, 'Delete permanently', danger: true),
-    ]
-        : <PopupMenuEntry<String>>[
-      item('profile', Icons.person_outline_rounded, 'View profile'),
-      item('access', Icons.lock_outline_rounded, 'Access & credentials'),
-      item('salary', Icons.currency_rupee_rounded, 'Set salary'),
-      const PopupMenuDivider(),
-      item('archive', Icons.delete_outline_rounded, 'Archive', danger: true),
+    return [
+      _item('profile', Icons.person_outline_rounded, 'View profile'),
+      if (access.canEdit)
+        _item('access', Icons.lock_outline_rounded, 'Access & credentials'),
+      if (access.canManageSalary)
+        _item('salary', Icons.currency_rupee_rounded, 'Set salary'),
+      if (access.canDelete) ...[
+        const PopupMenuDivider(),
+        _item('archive', Icons.delete_outline_rounded, 'Archive', danger: true),
+      ],
     ];
+  }
 
+  Widget _menu(List<PopupMenuEntry<String>> items) {
     return PopupMenuButton<String>(
       tooltip: 'Actions',
       padding: EdgeInsets.zero,

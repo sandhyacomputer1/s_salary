@@ -9,6 +9,9 @@ import 'emp_dashboard_screen.dart';
 import '../../leave/screens/emp_apply_leave_screen.dart';
 import '../../daily_report/screens/emp_daily_report_screen.dart';
 import '../../expense_claims/screens/employee_submit_expense_claim_screen.dart';
+import '../widgets/emp_sidebar_brand.dart';
+import '../widgets/emp_sidebar_style.dart';
+import '../widgets/emp_sidebar_user_card.dart';
 
 class EmpDashboardShell extends StatefulWidget {
   const EmpDashboardShell({super.key});
@@ -440,60 +443,9 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // --------------------------------------------------
-        // BRAND
+        // BRAND  (logo + "Sandhya Salary", same as the web)
         // --------------------------------------------------
-        Padding(
-          padding: showLabels
-              ? const EdgeInsets.fromLTRB(20, 20, 20, 18)
-              : const EdgeInsets.fromLTRB(0, 20, 0, 18),
-          child: Row(
-            mainAxisAlignment:
-            showLabels ? MainAxisAlignment.start : MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: primaryLight,
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.bolt_rounded,
-                  color: primary,
-                  size: 22,
-                ),
-              ),
-              if (showLabels) ...[
-                const SizedBox(width: 11),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Sandhya Salary',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: textDark,
-                        ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Employee Portal',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 11, color: textLight),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
+        EmpSidebarBrand(collapsed: !showLabels),
 
         const Divider(height: 1, color: border),
 
@@ -511,6 +463,19 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
         ),
 
         const Divider(height: 1, color: border),
+
+        // --------------------------------------------------
+        // NAME + ROLE of the logged-in employee (like the web)
+        // --------------------------------------------------
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            showLabels ? 12 : 10,
+            12,
+            showLabels ? 12 : 10,
+            0,
+          ),
+          child: Center(child: EmpSidebarUserCard(collapsed: !showLabels)),
+        ),
 
         // --------------------------------------------------
         // LOGOUT  +  SHOW/HIDE BUTTON (same row, button on the right)
@@ -622,12 +587,7 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
       child: Text(
         title,
         maxLines: 1,
-        style: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF98A1AF),
-          letterSpacing: 0.8,
-        ),
+        style: EmpSidebarStyle.sectionTitle, // darker, like the web
       ),
     );
   }
@@ -700,8 +660,8 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
                       child: Icon(
                         isSelected ? item.activeIcon : item.icon,
                         key: ValueKey<bool>(isSelected),
-                        size: 19,
-                        color: isSelected ? primary : textMedium,
+                        size: EmpSidebarStyle.iconSize,
+                        color: EmpSidebarStyle.icon(selected: isSelected),
                       ),
                     ),
                   ),
@@ -709,12 +669,7 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
                   Expanded(
                     child: AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 180),
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight:
-                        isSelected ? FontWeight.w700 : FontWeight.w500,
-                        color: isSelected ? primary : textDark,
-                      ),
+                      style: EmpSidebarStyle.item(selected: isSelected),
                       child: Text(
                         item.label,
                         maxLines: 1,
@@ -763,8 +718,8 @@ class _EmpDashboardShellState extends State<EmpDashboardShell> {
                     child: Icon(
                       isSelected ? item.activeIcon : item.icon,
                       key: ValueKey<bool>(isSelected),
-                      size: 21,
-                      color: isSelected ? primary : textMedium,
+                      size: EmpSidebarStyle.iconSize,
+                      color: EmpSidebarStyle.icon(selected: isSelected),
                     ),
                   ),
                 ),

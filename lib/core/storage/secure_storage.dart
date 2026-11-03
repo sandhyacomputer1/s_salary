@@ -66,6 +66,23 @@ class SecureStorage {
   }
 
   // ============================================================
+  // SAVE EMPLOYEE ID
+  // (used by the admin dashboard "My Space", so an HR / Accountant /
+  //  Manager login also has its own employee id)
+  // ============================================================
+
+  static Future<void> saveEmployeeId(
+      String employeeId,
+      ) async {
+    if (employeeId.isEmpty) return;
+
+    await _storage.write(
+      key: employeeIdKey,
+      value: employeeId,
+    );
+  }
+
+  // ============================================================
   // SAVE TEMPORARY TOKEN FOR 2FA
   // ============================================================
 

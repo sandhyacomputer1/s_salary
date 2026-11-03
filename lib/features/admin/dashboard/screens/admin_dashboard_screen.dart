@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import '../../../../core/permissions/app_permissions.dart'; // PERMISSION
 import '../../../../core/routes/app_routes.dart';
 import '../../../../data/models/employee.dart';
 import '../../../../data/services/employee_service.dart';
@@ -10,6 +11,7 @@ import '../../attendance_notifications/widgets/check_in_out_notifications_screen
 import '../../audit_trail/screens/audit_trail_screen.dart';
 import '../../branches/screens/branches_screen.dart';
 import '../../departments/screens/department_screen.dart';
+import '../../employees/models/admin_employee_access.dart'; // PERMISSION
 import '../../employees/models/admin_employee_model.dart';
 import '../../employees/screens/admin_employees_screen.dart';
 import '../../expenses/screens/expense_screen.dart';
@@ -25,6 +27,12 @@ import '../../team_roles/screens/team_roles_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+// MY SPACE: the employee screens, reused inside this dashboard
+import '../../../employee/dashboard/screens/emp_dashboard_screen.dart';
+import '../../../employee/expense_claims/screens/employee_submit_expense_claim_screen.dart';
+import '../../../employee/leave/screens/emp_apply_leave_screen.dart';
+import '../../../employee/salary/screens/employee_salary_screen.dart';
 
 import '../services/admin_session_profile_service.dart';
 import '../widgets/admin_brand_logo.dart';
@@ -104,6 +112,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   /// Name + role of the logged-in person (sidebar footer).
   AdminSessionProfile _me = const AdminSessionProfile(name: 'Admin', roleLabel: 'Admin');
+
+  // PERMISSION: false until the logged-in person's role is known.
+  // Until then only the Overview is available (so HR / Accountant never
+  // see a full menu for a moment).
+  bool _profileLoaded = false;
 
   // CLOCK
   Timer? _clockTimer;
@@ -294,14 +307,41 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       _overviewReload++; // reload the Overview screen too
     });
     _loadLicense();
+    _loadMyProfile(); // PERMISSION: pick up role / permission changes
     await _loadDashboardData();
   }
 
   /// Who is logged in: admin / owner / HR / accountant / manager.
   Future<void> _loadMyProfile() async {
-    final profile = await AdminSessionProfileService().load();
+    AdminSessionProfile profile = _me;
+    try {
+      profile = await AdminSessionProfileService().load();
+    } catch (e) {
+      debugPrint('PROFILE LOAD ERROR: $e');
+    }
+
+    // MY SPACE: the employee screens read the employee id from storage,
+    // so make sure this login's own employee id is saved there.
+    await _syncEmployeeId(profile.employeeId);
+
     if (!mounted) return;
-    setState(() => _me = profile);
+    setState(() {
+      _me = profile;
+      _profileLoaded = true; // PERMISSION: role is now known
+    });
+  }
+
+  /// MY SPACE: saves this person's own employee id (only if it changed).
+  Future<void> _syncEmployeeId(String employeeId) async {
+    if (employeeId.isEmpty) return;
+    try {
+      final saved = await SecureStorage.getEmployeeId();
+      if (saved != employeeId) {
+        await SecureStorage.saveEmployeeId(employeeId);
+      }
+    } catch (e) {
+      debugPrint('EMPLOYEE ID SAVE ERROR: $e');
+    }
   }
 
   /// Loads the licence data (start date, valid until, duration).
@@ -311,11 +351,175 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     setState(() => _license = info);
   }
 
+  // ==========================================================
+  // PERMISSION (role based access)
+  // ==========================================================
+
+  /// Name of each screen in the company's saved permission list
+  /// (settings.rolePermissions from the server).
+  static const Map<int, String> _screenKeys = {
+    0: 'dashboard',
+    1: 'employees',
+    2: 'calendar',
+    3: 'leaves',
+    4: 'shift_roster',
+    5: 'field_tracking',
+    6: 'departments',
+    7: 'expenses',
+    8: 'notifications',
+    9: 'audit',
+    10: 'payroll',
+    11: 'branches',
+    12: 'team',
+    13: 'settings',
+    14: 'reports',
+  };
+
+  // MY SPACE screens (own check-in, leaves, expenses, payslips).
+  // They are not part of the company's saved permission list: they depend
+  // on having an employee record (and, for payslips, on the API rules).
+  static const int _mySpaceFirst = 15;
+  static const int _myAttendance = 15;
+  static const int _myLeaves = 16;
+  static const int _myExpenses = 17;
+  static const int _myPayslips = 18;
+
+  /// Sub-role of the logged-in admin: owner | general_admin | hr |
+  /// accountant | manager (API reference, section 3.1).
+  /// An admin whose sub-role is unknown is treated as general_admin.
+  String get _subRoleKey =>
+      _me.subRole.isNotEmpty ? _me.subRole : AppPermissions.subGeneralAdmin;
+
+  /// Owner and general admin always have full access (the server's saved
+  /// list has no entry for them).
+  bool get _isOwnerLevel =>
+      _subRoleKey == AppPermissions.subOwner ||
+          _subRoleKey == AppPermissions.subGeneralAdmin;
+
+  /// MY SPACE: does this login have its own employee record?
+  bool get _hasEmployeeRecord => _me.employeeId.isNotEmpty;
+
+  /// MY SPACE rules (API reference):
+  ///  - check-in / check-out, leaves, expenses: every admin with an employee
+  ///  - payslips (GET /salary/slips): employee, accountant, manager only
+  bool _canOpenMySpace(int index) {
+    if (!_profileLoaded || !_hasEmployeeRecord) return false;
+    if (index == _myPayslips) {
+      return _subRoleKey == AppPermissions.subAccountant ||
+          _subRoleKey == AppPermissions.subManager;
+    }
+    return true;
+  }
+
+  /// Fallback module for a screen (used only if the server sent no list).
+  AppModule? _moduleForIndex(int index) {
+    switch (index) {
+      case 1:
+        return AppModule.employees;
+      case 3:
+        return AppModule.leaves;
+      case 4:
+        return AppModule.shifts;
+      case 5:
+        return AppModule.attendance; // Field Tracking
+      case 6:
+        return AppModule.departments;
+      case 7:
+        return AppModule.expenses;
+      case 8:
+        return AppModule.attendance; // Check-in / check-out notifications
+      case 9:
+        return AppModule.auditLogs;
+      case 10:
+        return AppModule.payroll;
+      case 11:
+        return AppModule.branches;
+      case 12:
+        return AppModule.subAdmins; // Team & Roles
+      case 13:
+        return AppModule.settings;
+      case 14:
+        return AppModule.reports;
+      default:
+        return null; // 0 = Overview, 2 = Calendar
+    }
+  }
+
+  bool _can(AppModule module, [AppAction action = AppAction.view]) {
+    return AppPermissions.can(
+      role: AppPermissions.roleAdmin,
+      subRole: _subRoleKey,
+      module: module,
+      action: action,
+    );
+  }
+
+  /// Can the logged-in person open this screen?
+  ///   0. MY SPACE screens -> own rules (employee record, API role list)
+  ///   1. owner / general admin  -> yes
+  ///   2. the company's saved list from the server -> must contain the screen
+  ///   3. no list from the server -> built-in fallback (app_permissions.dart)
+  bool _canOpenIndex(int index) {
+    if (index == 0) return true; // Overview is always available
+    if (!_profileLoaded) return false; // role not known yet
+    if (index >= _mySpaceFirst) return _canOpenMySpace(index);
+    if (_isOwnerLevel) return true;
+
+    final key = _screenKeys[index];
+    if (key == null) return true;
+
+    if (_me.permissions.isNotEmpty) return _me.permissions.contains(key);
+
+    final module = _moduleForIndex(index);
+    if (module == null) return true;
+    return _can(module);
+  }
+
+  /// Can the logged-in person do this action (create / edit / delete) in a
+  /// module? Owner and general admin: always. Others: the built-in map in
+  /// app_permissions.dart. No entry there = view only.
+  bool _canDo(AppModule module, AppAction action) {
+    if (!_profileLoaded) return false;
+    if (_isOwnerLevel) return true;
+    return _can(module, action);
+  }
+
+  /// Approve / reject leaves. Everyone else who can open Leaves only views.
+  bool get _canManageLeaves => _canDo(AppModule.leaves, AppAction.edit);
+
+  /// Approve / reject expenses. Everyone else who can open Expenses only views.
+  bool get _canManageExpenses => _canDo(AppModule.expenses, AppAction.edit);
+
+  /// Generate / email payroll, refund PF, set salary. Everyone else who can
+  /// open Payroll only views.
+  bool get _canManagePayroll => _canDo(AppModule.payroll, AppAction.edit);
+
+  /// What this role may do with employees (Employees screen, Overview and
+  /// the employee profile).
+  AdminEmployeeAccess get _employeeAccess => AdminEmployeeAccess(
+    canCreate: _canDo(AppModule.employees, AppAction.create),
+    canEdit: _canDo(AppModule.employees, AppAction.edit),
+    canDelete: _canDo(AppModule.employees, AppAction.delete),
+    // Salary is payroll data: only roles that can open Payroll (screen 10)
+    // see it. To let everyone who can open Employees see salary, change
+    // this line to:  canSeeSalary: true,
+    canSeeSalary: _canOpenIndex(10),
+    // Profile tabs follow the matching dashboard screens:
+    canSeeAttendance:
+    _canOpenIndex(1) || _canOpenIndex(8) || _canOpenIndex(5),
+    canSeeLeaves: _canOpenIndex(3),
+    canSeeExpenses: _canOpenIndex(7),
+  );
+
+  /// Bell numbers only count what this person is allowed to see.
+  int get _leavesBadge => _canOpenIndex(3) ? _pendingLeaves : 0;
+  int get _expensesBadge => _canOpenIndex(7) ? _pendingExpenses : 0;
+
   /// The number shown on the red badge of the bell icon.
   int get _notificationCount => adminNotificationCount(
     license: _license,
-    pendingLeaves: _pendingLeaves,
-    pendingExpenses: _pendingExpenses,
+    pendingLeaves: _leavesBadge,
+    pendingExpenses: _expensesBadge,
   );
 
   /// Opens the notifications panel under the bell icon.
@@ -323,8 +527,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return showAdminNotificationsPanel(
       context,
       license: _license,
-      pendingLeaves: _pendingLeaves,
-      pendingExpenses: _pendingExpenses,
+      pendingLeaves: _leavesBadge,
+      pendingExpenses: _expensesBadge,
       // "View all notifications" -> the check-in / check-out notifications screen
       onViewAll: () => _goTo(8),
       // tapping the pending cards opens Leaves / Expenses
@@ -335,6 +539,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   /// Switches the screen WITHOUT touching the drawer.
   void _goTo(int index) {
+    if (!_canOpenIndex(index)) return; // PERMISSION: blocked screen
     setState(() {
       if (index == 1) {
         _pendingProfile = null; // sidebar "Employees" always shows the list
@@ -352,6 +557,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   /// Person icon on the Overview -> Employees screen with this profile open.
   void _openProfileFromOverview(AdminEmployeeModel employee) {
+    if (!_canOpenIndex(1)) return; // PERMISSION: no access to Employees
     setState(() {
       _pendingProfile = employee;
       _employeesResetKey++;
@@ -431,6 +637,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (_selectedScreenIndex == 12) titleText = 'Team & Roles';
     if (_selectedScreenIndex == 13) titleText = 'Settings';
     if (_selectedScreenIndex == 14) titleText = 'Reports & Matrix';
+    if (_selectedScreenIndex == _myAttendance) titleText = 'My Attendance';
+    if (_selectedScreenIndex == _myLeaves) titleText = 'My Leaves';
+    if (_selectedScreenIndex == _myExpenses) titleText = 'My Expenses';
+    if (_selectedScreenIndex == _myPayslips) titleText = 'My Payslips';
 
     return AppBar(
       elevation: 0,
@@ -523,31 +733,114 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  /// PERMISSION: shown if someone reaches a screen their role cannot open.
+  Widget _buildNoAccess() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: _primaryTint,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(Icons.lock_outline_rounded, color: _primary, size: 30),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No access',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: _textDark,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Your role does not have permission to open this screen.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13.5, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => setState(() => _selectedScreenIndex = 0),
+              style: FilledButton.styleFrom(backgroundColor: _primary),
+              child: const Text('Go to Overview'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBodyContent() {
+    // PERMISSION: never build a screen this role is not allowed to open
+    if (!_canOpenIndex(_selectedScreenIndex)) return _buildNoAccess();
+
     if (_selectedScreenIndex == 1) {
       return AdminEmployeesScreen(
         key: ValueKey('employees-$_employeesResetKey'),
         embedded: true,
         initialProfile: _pendingProfile,
+        access: _employeeAccess, // PERMISSION
       );
     }
     if (_selectedScreenIndex == 2) return const CalendarScreen(embedded: true);
-    if (_selectedScreenIndex == 3) return const LeaveScreen(embedded: true);
+    if (_selectedScreenIndex == 3) {
+      // PERMISSION: view only unless this role may manage leaves
+      return LeaveScreen(embedded: true, canManage: _canManageLeaves);
+    }
     if (_selectedScreenIndex == 4) return const ShiftRosterScreen(embedded: true);
     if (_selectedScreenIndex == 5) return const FieldTrackingScreen(embedded: true);
     if (_selectedScreenIndex == 6) return const DepartmentScreen(embedded: true);
-    if (_selectedScreenIndex == 7) return const ExpenseScreen(embedded: true);
+    if (_selectedScreenIndex == 7) {
+      // PERMISSION: view only unless this role may manage expenses
+      return ExpenseScreen(embedded: true, canManage: _canManageExpenses);
+    }
     if (_selectedScreenIndex == 8) return const CheckInOutNotificationsScreen(embedded: true);
     if (_selectedScreenIndex == 9) return const AuditTrailScreen(embedded: true);
-    if (_selectedScreenIndex == 10) return const PayrollScreen(embedded: true);
+    if (_selectedScreenIndex == 10) {
+      // PERMISSION: view only unless this role may manage payroll
+      return PayrollScreen(embedded: true, canManage: _canManagePayroll);
+    }
     if (_selectedScreenIndex == 11) return const BranchesScreen(embedded: true);
     if (_selectedScreenIndex == 12) return const TeamRolesScreen(embedded: true);
     if (_selectedScreenIndex == 13) return const SettingsScreen(embedded: true);
     if (_selectedScreenIndex == 14) return const ReportsMainScreen();
 
+    // MY SPACE: the employee screens, reused as they are
+    if (_selectedScreenIndex == _myAttendance) {
+      return const EmpDashboardScreen(embedded: true);
+    }
+    if (_selectedScreenIndex == _myLeaves) {
+      return const EmpApplyLeaveScreen(embedded: true);
+    }
+    if (_selectedScreenIndex == _myExpenses) {
+      return const EmployeeSubmitExpenseClaimScreen(embedded: true);
+    }
+    if (_selectedScreenIndex == _myPayslips) {
+      return const EmployeeSalaryScreen(embedded: true);
+    }
+
+    // PERMISSION: wait for the role, so the Overview is loaded only once
+    // and with the right parts (no flash of cards this role cannot see)
+    if (!_profileLoaded) {
+      return const Center(child: CircularProgressIndicator(color: _primary));
+    }
+
     // Overview (matches the web dashboard)
+    // PERMISSION: each role gets only the parts it can use
     return AdminOverviewScreen(
       key: ValueKey('overview-$_overviewReload'),
+      canSeeEmployees: _canOpenIndex(1),
+      canSeeAttendance: _canOpenIndex(1) || _canOpenIndex(8) || _canOpenIndex(5),
+      canSeeLeaves: _canOpenIndex(3),
+      canSeeExpenses: _canOpenIndex(7),
+      employeeAccess: _employeeAccess,
       onViewAllEmployees: () => _goTo(1),
       onViewAllLeaves: () => _goTo(3),
       onViewAllExpenses: () => _goTo(7),
@@ -561,14 +854,46 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // ==========================================================
 
   /// The menu, grouped in parts. Add / remove items here.
+  /// PERMISSION: items (and empty groups) the role cannot open are removed.
   List<_SideSection> _sidebarSections() {
-    return [
+    final all = <_SideSection>[
       _SideSection('OVERVIEW', [
         _SideItem(Icons.dashboard_outlined,
             'Overview', () => _onNavigationSelected(0),
             selectedIndex: 0
         ),
 
+      ]),
+
+      // MY SPACE: the person's own check-in, leaves, expenses and payslips
+      _SideSection('MY SPACE', [
+        _SideItem(
+            Icons.how_to_reg_outlined,
+            'My Attendance',
+                () => _onNavigationSelected(_myAttendance),
+            selectedIndex: _myAttendance
+        ),
+
+        _SideItem(
+            Icons.event_note_outlined,
+            'My Leaves',
+                () => _onNavigationSelected(_myLeaves),
+            selectedIndex: _myLeaves
+        ),
+
+        _SideItem(
+            Icons.request_quote_outlined,
+            'My Expenses',
+                () => _onNavigationSelected(_myExpenses),
+            selectedIndex: _myExpenses
+        ),
+
+        _SideItem(
+            Icons.description_outlined,
+            'My Payslips',
+                () => _onNavigationSelected(_myPayslips),
+            selectedIndex: _myPayslips
+        ),
       ]),
 
       _SideSection('WORKFORCE', [
@@ -666,6 +991,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
       ]),
     ];
+
+    // PERMISSION: keep only what this role can open, drop empty groups
+    final visible = <_SideSection>[];
+    for (final section in all) {
+      final items = section.items
+          .where((item) =>
+      item.selectedIndex == null || _canOpenIndex(item.selectedIndex!))
+          .toList();
+      if (items.isNotEmpty) visible.add(_SideSection(section.title, items));
+    }
+    return visible;
   }
 
   Widget _buildSidebar({required bool isMobileDrawer}) {
@@ -999,6 +1335,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Future<void> _logout() async {
     if (_isMobile) Navigator.pop(context);
     await SecureStorage.clearSession();
+
+    // MY SPACE: the next person must never see this person's attendance data
+    EmpDashboardScreen.clearCache();
+
     if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
   }

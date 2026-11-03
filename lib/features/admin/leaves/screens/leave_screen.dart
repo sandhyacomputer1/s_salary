@@ -10,7 +10,15 @@ class LeaveScreen extends StatefulWidget {
   /// The dashboard already provides the Scaffold and AppBar.
   final bool embedded;
 
-  const LeaveScreen({super.key, this.embedded = false});
+  /// PERMISSION: false = view only (no Approve / Reject anywhere on this
+  /// screen or in the details page). The default is true (the old behaviour).
+  final bool canManage;
+
+  const LeaveScreen({
+    super.key,
+    this.embedded = false,
+    this.canManage = true,
+  });
 
   @override
   State<LeaveScreen> createState() => _LeaveScreenState();
@@ -114,6 +122,8 @@ class _LeaveScreenState extends State<LeaveScreen> {
   }
 
   Future<bool> _approveLeave(LeaveModel leave) async {
+    if (!widget.canManage) return false; // PERMISSION
+
     try {
       final result = await _service.approveLeave(leave.id);
 
@@ -169,6 +179,8 @@ class _LeaveScreenState extends State<LeaveScreen> {
   }
 
   Future<bool> _rejectLeave(LeaveModel leave) async {
+    if (!widget.canManage) return false; // PERMISSION
+
     final confirmed = await _confirmReject(leave);
 
     if (!confirmed || !mounted) return false;
@@ -202,8 +214,9 @@ class _LeaveScreenState extends State<LeaveScreen> {
       MaterialPageRoute(
         builder: (_) => LeaveDetailsScreen(
           leave: leave,
-          onApprove: () => _approveLeave(leave),
-          onReject: () => _rejectLeave(leave),
+          // PERMISSION: no actions at all for a view-only role
+          onApprove: widget.canManage ? () => _approveLeave(leave) : null,
+          onReject: widget.canManage ? () => _rejectLeave(leave) : null,
         ),
       ),
     );
@@ -334,11 +347,11 @@ class _LeaveScreenState extends State<LeaveScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'Leave Management',
                 style: TextStyle(
                   fontSize: 22,
@@ -346,10 +359,12 @@ class _LeaveScreenState extends State<LeaveScreen> {
                   color: textDark,
                 ),
               ),
-              SizedBox(height: 5),
+              const SizedBox(height: 5),
               Text(
-                'Review and manage employee leave requests.',
-                style: TextStyle(
+                widget.canManage
+                    ? 'Review and manage employee leave requests.'
+                    : 'View employee leave requests.',
+                style: const TextStyle(
                   fontSize: 13,
                   color: textMedium,
                 ),
@@ -357,6 +372,31 @@ class _LeaveScreenState extends State<LeaveScreen> {
             ],
           ),
         ),
+        // PERMISSION: tells a view-only role why there are no buttons
+        if (!widget.canManage)
+          Container(
+            margin: const EdgeInsets.only(left: 12, top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F2F4),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.visibility_outlined, size: 14, color: textLight),
+                SizedBox(width: 5),
+                Text(
+                  'View only',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: textMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -569,10 +609,14 @@ class _LeaveScreenState extends State<LeaveScreen> {
             leave: leaves[i],
             index: i,
             onTap: () => _openDetails(leaves[i]),
-            onApprove: leaves[i].status.toLowerCase() == 'pending'
+            // PERMISSION: Approve / Reject only for pending leaves AND
+            // only for roles that may manage leaves
+            onApprove: widget.canManage &&
+                leaves[i].status.toLowerCase() == 'pending'
                 ? () => _approveLeave(leaves[i])
                 : null,
-            onReject: leaves[i].status.toLowerCase() == 'pending'
+            onReject: widget.canManage &&
+                leaves[i].status.toLowerCase() == 'pending'
                 ? () => _rejectLeave(leaves[i])
                 : null,
           ),

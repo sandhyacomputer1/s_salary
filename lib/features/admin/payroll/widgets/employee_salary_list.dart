@@ -15,6 +15,8 @@ const Color _kRed = Color(0xFFDC2626);
 /// Below this width the table becomes a list of cards.
 const double _kNarrow = 700;
 
+/// PERMISSION: [canManage] = false is view only. Access, Set Salary and
+/// Delete are hidden; Profile and Export CSV stay. Default: true (old behaviour).
 class EmployeeSalaryList extends StatelessWidget {
   const EmployeeSalaryList({
     super.key,
@@ -28,6 +30,7 @@ class EmployeeSalaryList extends StatelessWidget {
     required this.onEditAccess,
     required this.onViewProfile,
     required this.onDelete,
+    this.canManage = true,
   });
 
   final List<Employee> employees;
@@ -40,6 +43,12 @@ class EmployeeSalaryList extends StatelessWidget {
   final ValueChanged<Employee> onEditAccess;
   final ValueChanged<Employee> onViewProfile;
   final ValueChanged<Employee> onDelete;
+
+  /// PERMISSION: false = view only.
+  final bool canManage;
+
+  /// Width of the ACTIONS column (4 buttons, or just Profile).
+  double get _actionsWidth => canManage ? 180 : 72;
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +71,9 @@ class EmployeeSalaryList extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Set each employee\'s base salary and allowances. A new salary applies the next time payroll is calculated.',
+              canManage
+                  ? 'Set each employee\'s base salary and allowances. A new salary applies the next time payroll is calculated.'
+                  : 'View each employee\'s base salary.',
               style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
             ),
           ],
@@ -272,43 +283,51 @@ class EmployeeSalaryList extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Actions
-          Row(
-            children: [
-              Expanded(
-                child: _mobileAction(
-                  Icons.lock_outline_rounded,
-                  'Access',
-                      () => onEditAccess(e),
+          // PERMISSION: a view-only role only gets the Profile button
+          if (canManage)
+            Row(
+              children: [
+                Expanded(
+                  child: _mobileAction(
+                    Icons.lock_outline_rounded,
+                    'Access',
+                        () => onEditAccess(e),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _mobileAction(
-                  Icons.currency_rupee_rounded,
-                  'Salary',
-                      () => onSetSalary(e),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _mobileAction(
+                    Icons.currency_rupee_rounded,
+                    'Salary',
+                        () => onSetSalary(e),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _mobileAction(
-                  Icons.person_outline_rounded,
-                  'Profile',
-                      () => onViewProfile(e),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _mobileAction(
+                    Icons.person_outline_rounded,
+                    'Profile',
+                        () => onViewProfile(e),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 44,
-                child: _mobileAction(
-                  Icons.delete_outline_rounded,
-                  null,
-                      () => onDelete(e),
-                  isDanger: true,
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 44,
+                  child: _mobileAction(
+                    Icons.delete_outline_rounded,
+                    null,
+                        () => onDelete(e),
+                    isDanger: true,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            )
+          else
+            _mobileAction(
+              Icons.person_outline_rounded,
+              'Profile',
+                  () => onViewProfile(e),
+            ),
         ],
       ),
     );
@@ -427,16 +446,19 @@ class EmployeeSalaryList extends StatelessWidget {
         Container(
           color: const Color(0xFFF8F9FB),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: const Row(
+          child: Row(
             children: [
-              Expanded(flex: 3, child: _HeaderText('EMPLOYEE')),
-              Expanded(flex: 2, child: _HeaderText('CODE')),
-              Expanded(flex: 2, child: _HeaderText('DEPARTMENT')),
-              Expanded(flex: 2, child: _HeaderText('WORK MODE')),
-              Expanded(flex: 2, child: _HeaderText('JOINING')),
-              Expanded(flex: 2, child: _HeaderText('STATUS')),
-              Expanded(flex: 2, child: _HeaderText('SALARY')),
-              SizedBox(width: 180, child: _HeaderText('ACTIONS')),
+              const Expanded(flex: 3, child: _HeaderText('EMPLOYEE')),
+              const Expanded(flex: 2, child: _HeaderText('CODE')),
+              const Expanded(flex: 2, child: _HeaderText('DEPARTMENT')),
+              const Expanded(flex: 2, child: _HeaderText('WORK MODE')),
+              const Expanded(flex: 2, child: _HeaderText('JOINING')),
+              const Expanded(flex: 2, child: _HeaderText('STATUS')),
+              const Expanded(flex: 2, child: _HeaderText('SALARY')),
+              SizedBox(
+                width: _actionsWidth,
+                child: const _HeaderText('ACTIONS'),
+              ),
             ],
           ),
         ),
@@ -536,18 +558,23 @@ class EmployeeSalaryList extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 180,
+            width: _actionsWidth,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                _actionBtn(Icons.lock_outline_rounded, () => onEditAccess(e), 'Access'),
-                const SizedBox(width: 6),
-                _actionBtn(Icons.currency_rupee_rounded, () => onSetSalary(e), 'Set Salary'),
-                const SizedBox(width: 6),
+                // PERMISSION: Access / Set Salary / Delete need manage rights
+                if (canManage) ...[
+                  _actionBtn(Icons.lock_outline_rounded, () => onEditAccess(e), 'Access'),
+                  const SizedBox(width: 6),
+                  _actionBtn(Icons.currency_rupee_rounded, () => onSetSalary(e), 'Set Salary'),
+                  const SizedBox(width: 6),
+                ],
                 _actionBtn(Icons.person_outline_rounded, () => onViewProfile(e), 'Profile'),
-                const SizedBox(width: 6),
-                _actionBtn(Icons.delete_outline_rounded, () => onDelete(e), 'Delete',
-                    isDanger: true),
+                if (canManage) ...[
+                  const SizedBox(width: 6),
+                  _actionBtn(Icons.delete_outline_rounded, () => onDelete(e), 'Delete',
+                      isDanger: true),
+                ],
               ],
             ),
           ),

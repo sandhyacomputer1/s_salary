@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/storage/secure_storage.dart'; // TODO: fix path if different
+import '../../employees/models/admin_employee_access.dart';
 import '../../employees/models/admin_employee_model.dart';
 import '../../employees/services/admin_csv_download.dart';
 import '../../employees/services/admin_employee_csv_service.dart';
@@ -20,6 +21,10 @@ import '../widgets/admin_overview_stat_cards.dart';
 
 /// Company Dashboard overview (matches the web):
 /// 4 stat cards, Employees table, Pending Leaves + Pending Expenses.
+///
+/// PERMISSION: the canSee... flags decide which parts this role gets, and
+/// [employeeAccess] decides what it may do inside the Employees card.
+/// All default to "allowed", so a screen that does not pass them behaves as before.
 class AdminOverviewScreen extends StatefulWidget {
   final VoidCallback onViewAllEmployees;
   final VoidCallback onViewAllLeaves;
@@ -32,6 +37,22 @@ class AdminOverviewScreen extends StatefulWidget {
   /// dashboard can refresh its notification badge.
   final VoidCallback? onDataChanged;
 
+  /// PERMISSION: Employees card, Active + Archived stat cards.
+  final bool canSeeEmployees;
+
+  /// PERMISSION: Daily Check-In & Check-Out card.
+  final bool canSeeAttendance;
+
+  /// PERMISSION: Pending Leaves stat card + list.
+  final bool canSeeLeaves;
+
+  /// PERMISSION: Pending Expenses stat card + list.
+  final bool canSeeExpenses;
+
+  /// PERMISSION: what this role may do in the Employees card
+  /// (add / edit / archive / see salary).
+  final AdminEmployeeAccess employeeAccess;
+
   const AdminOverviewScreen({
     super.key,
     required this.onViewAllEmployees,
@@ -39,6 +60,11 @@ class AdminOverviewScreen extends StatefulWidget {
     required this.onViewAllExpenses,
     required this.onOpenProfile,
     this.onDataChanged,
+    this.canSeeEmployees = true,
+    this.canSeeAttendance = true,
+    this.canSeeLeaves = true,
+    this.canSeeExpenses = true,
+    this.employeeAccess = AdminEmployeeAccess.full,
   });
 
   @override
@@ -49,6 +75,8 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   final AdminEmployeeService _emp = AdminEmployeeService();
   final AdminOverviewService _ov = AdminOverviewService();
   final AdminEmployeeProfileService _profileService = AdminEmployeeProfileService();
+
+  AdminEmployeeAccess get _access => widget.employeeAccess;
 
   bool _loading = true;
   String? _error;
@@ -65,6 +93,20 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  /// PERMISSION: if the allowed parts change (role loaded / refreshed),
+  /// load again so the newly allowed parts have their data.
+  @override
+  void didUpdateWidget(covariant AdminOverviewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.canSeeEmployees != widget.canSeeEmployees ||
+        oldWidget.canSeeAttendance != widget.canSeeAttendance ||
+        oldWidget.canSeeLeaves != widget.canSeeLeaves ||
+        oldWidget.canSeeExpenses != widget.canSeeExpenses ||
+        oldWidget.employeeAccess != widget.employeeAccess) {
+      _load();
+    }
   }
 
   // ------------------------------------------------------------
@@ -95,22 +137,41 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
       }
       final cid = _companyId;
 
+      final seeEmployees = widget.canSeeEmployees;
+      final seeLeaves = widget.canSeeLeaves;
+      final seeExpenses = widget.canSeeExpenses;
+      final seeSalary = seeEmployees && _access.canSeeSalary;
+
+      // PERMISSION: only ask the server for what this role may see.
+      // (The active list is always needed: names for leave / expense rows
+      // and the check-in card.)
       final results = await Future.wait([
         _emp.getActiveEmployees(),
-        _safe(_emp.getArchivedEmployees(), <AdminEmployeeModel>[]),
-        _safe(_ov.getPendingLeaves(), <AdminPendingLeave>[]),
-        _safe(_ov.getPendingExpenses(), <AdminPendingExpense>[]),
-        _safe<int?>(_ov.getMaxEmployees(), null),
-        cid.isEmpty ? Future.value(<String, double>{}) : _emp.getSalaryMap(cid),
-        cid.isEmpty
+        seeEmployees
+            ? _safe(_emp.getArchivedEmployees(), <AdminEmployeeModel>[])
+            : Future.value(<AdminEmployeeModel>[]),
+        seeLeaves
+            ? _safe(_ov.getPendingLeaves(), <AdminPendingLeave>[])
+            : Future.value(<AdminPendingLeave>[]),
+        seeExpenses
+            ? _safe(_ov.getPendingExpenses(), <AdminPendingExpense>[])
+            : Future.value(<AdminPendingExpense>[]),
+        seeEmployees ? _safe<int?>(_ov.getMaxEmployees(), null) : Future<int?>.value(null),
+        // salary only for roles that may see it
+        (!seeSalary || cid.isEmpty)
+            ? Future.value(<String, double>{})
+            : _emp.getSalaryMap(cid),
+        (!seeEmployees || cid.isEmpty)
             ? Future.value(AdminEmployeeService.fallbackDepartments)
             : _emp.getDepartments(cid),
       ]);
 
       var active = results[0] as List<AdminEmployeeModel>;
       final salary = results[5] as Map<String, double>;
-      active = active.map((e) => e.copyWith(baseSalary: salary[e.id])).toList()
-        ..sort((a, b) => b.employeeCode.compareTo(a.employeeCode)); // newest first
+      if (seeSalary) {
+        active = active.map((e) => e.copyWith(baseSalary: salary[e.id])).toList();
+      }
+      active.sort((a, b) => b.employeeCode.compareTo(a.employeeCode)); // newest first
 
       if (!mounted) return;
       setState(() {
@@ -161,6 +222,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   }
 
   Future<void> _addEmployee() async {
+    if (!_access.canCreate) return; // PERMISSION
     final created = await AdminAddEmployeeDialog.show(
       context,
       service: _emp,
@@ -192,6 +254,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   }
 
   Future<void> _openAccess(AdminEmployeeModel e) async {
+    if (!_access.canEdit) return; // PERMISSION
     final saved = await AdminAccessDialog.show(context, service: _emp, employee: e);
     if (saved == true) {
       if (!mounted) return;
@@ -201,6 +264,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   }
 
   Future<void> _openSalary(AdminEmployeeModel e) async {
+    if (!_access.canManageSalary) return; // PERMISSION
     final saved = await AdminSalaryDialog.show(context, service: _emp, employee: e);
     if (saved == true) {
       if (!mounted) return;
@@ -210,6 +274,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
   }
 
   Future<void> _archive(AdminEmployeeModel e) async {
+    if (!_access.canDelete) return; // PERMISSION
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -265,6 +330,43 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
     final wide = MediaQuery.of(context).size.width >= 800;
     final pad = wide ? 28.0 : 14.0;
 
+    // PERMISSION: only the parts this role may see are added (24 px apart).
+    final parts = <Widget>[];
+    void add(Widget w) {
+      if (parts.isNotEmpty) parts.add(const SizedBox(height: 24));
+      parts.add(w);
+    }
+
+    if (widget.canSeeEmployees || widget.canSeeLeaves || widget.canSeeExpenses) {
+      add(AdminOverviewStatCards(
+        activeValue: _maxEmployees == null
+            ? '${_active.length}'
+            : '${_active.length} / $_maxEmployees',
+        pendingLeaves: _leaves.length,
+        pendingExpenses: _expenses.length,
+        archived: _archived.length,
+        showActive: widget.canSeeEmployees,
+        showArchived: widget.canSeeEmployees,
+        showLeaves: widget.canSeeLeaves,
+        showExpenses: widget.canSeeExpenses,
+      ));
+    }
+
+    if (widget.canSeeAttendance) {
+      // daily check-in / check-out list (change the day to change the list)
+      add(AdminDailyAttendanceCard(
+        employees: _active,
+        companyId: _companyId,
+        service: _ov,
+      ));
+    }
+
+    if (widget.canSeeEmployees) add(_employeesCard());
+
+    if (widget.canSeeLeaves || widget.canSeeExpenses) add(_pendingSection());
+
+    if (parts.isEmpty) add(_nothingToShow());
+
     return Container(
       color: AdminEmpColors.bg,
       child: RefreshIndicator(
@@ -275,28 +377,28 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
           padding: EdgeInsets.fromLTRB(pad, 22, pad, 40),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AdminOverviewStatCards(
-                activeValue: _maxEmployees == null
-                    ? '${_active.length}'
-                    : '${_active.length} / $_maxEmployees',
-                pendingLeaves: _leaves.length,
-                pendingExpenses: _expenses.length,
-                archived: _archived.length,
-              ),
-              const SizedBox(height: 24),
-              // daily check-in / check-out list (change the day to change the list)
-              AdminDailyAttendanceCard(
-                employees: _active,
-                companyId: _companyId,
-                service: _ov,
-              ),
-              const SizedBox(height: 24),
-              _employeesCard(),
-              const SizedBox(height: 24),
-              _pendingSection(),
-            ],
+            children: parts,
           ),
+        ),
+      ),
+    );
+  }
+
+  /// PERMISSION: shown only when a role has the dashboard but none of its parts.
+  Widget _nothingToShow() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFEDEFF3)),
+      ),
+      child: const Center(
+        child: Text(
+          'Welcome. Use the menu on the left to open your screens.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AdminEmpColors.muted, fontSize: 15),
         ),
       ),
     );
@@ -394,6 +496,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
                       child: AdminEmployeeTable(
                         employees: _active,
                         archived: false,
+                        access: _access,
                         onAccess: _openAccess,
                         onSalary: _openSalary,
                         onProfile: widget.onOpenProfile,
@@ -413,6 +516,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
                         AdminEmployeeCard(
                           employee: e,
                           archived: false,
+                          access: _access,
                           onAccess: () => _openAccess(e),
                           onSalary: () => _openSalary(e),
                           onProfile: () => widget.onOpenProfile(e),
@@ -457,6 +561,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
     // ---------- phone ----------
     //  Employees (5)                      [ View All ]
     //  [   Export CSV   ]  [ + Add Employee ]
+    // PERMISSION: "+ Add Employee" needs create rights.
     if (narrow) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -492,20 +597,22 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
                   child: const Text('Export CSV', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _addEmployee,
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(0, 44),
-                    backgroundColor: AdminEmpColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              if (_access.canCreate) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _addEmployee,
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                      backgroundColor: AdminEmpColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('+ Add Employee', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
                   ),
-                  child: const Text('+ Add Employee', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
                 ),
-              ),
+              ],
             ],
           ),
         ],
@@ -534,18 +641,19 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
           runSpacing: 10,
           children: [
             outlined('Export CSV', _exportCsv),
-            ElevatedButton(
-              onPressed: _addEmployee,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(0, 46),
-                backgroundColor: AdminEmpColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 2,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            if (_access.canCreate)
+              ElevatedButton(
+                onPressed: _addEmployee,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(0, 46),
+                  backgroundColor: AdminEmpColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('+ Add Employee', style: TextStyle(fontWeight: FontWeight.w700)),
               ),
-              child: const Text('+ Add Employee', style: TextStyle(fontWeight: FontWeight.w700)),
-            ),
             outlined('View All', widget.onViewAllEmployees),
           ],
         ),
@@ -603,6 +711,10 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
       onViewAll: widget.onViewAllExpenses,
       rows: expenseRows,
     );
+
+    // PERMISSION: a role that may see only one of the two gets one full-width card
+    if (widget.canSeeLeaves && !widget.canSeeExpenses) return leaves;
+    if (widget.canSeeExpenses && !widget.canSeeLeaves) return expenses;
 
     return LayoutBuilder(
       builder: (context, c) {

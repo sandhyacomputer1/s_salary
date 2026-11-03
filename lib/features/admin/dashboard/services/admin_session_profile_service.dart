@@ -8,7 +8,30 @@ class AdminSessionProfile {
   final String name;
   final String roleLabel;
 
-  const AdminSessionProfile({required this.name, required this.roleLabel});
+  /// Base role from the API: super_admin | admin | employee ('' = unknown).
+  final String role;
+
+  /// Admin sub-role from the API: owner | general_admin | hr | accountant |
+  /// manager ('' = unknown or not an admin).
+  final String subRole;
+
+  /// Screens this sub-role may open, from the company's saved list
+  /// (settings.rolePermissions), e.g. [dashboard, employees, leaves].
+  /// Empty = the server did not send a list for this role.
+  final List<String> permissions;
+
+  /// This person's own employee record id ('' = no employee record).
+  /// Used by "My Space" (own check-in, leaves, expenses, payslips).
+  final String employeeId;
+
+  const AdminSessionProfile({
+    required this.name,
+    required this.roleLabel,
+    this.role = '',
+    this.subRole = '',
+    this.permissions = const [],
+    this.employeeId = '',
+  });
 
   String get initials {
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
@@ -24,8 +47,10 @@ class AdminSessionProfile {
 ///
 ///   name        <- GET /employees/me   (own profile)
 ///   role label  <- user.subRole  (owner | general_admin | hr | accountant | manager)
-///                  found through GET /companies/me  (adminId / assignedAdmins)
+///                  found through the company (adminId / assignedAdmins)
 ///                  employees: their designation (or "Employee")
+///   permissions <- settings.rolePermissions[subRole]  (same /employees/me answer)
+///   employeeId  <- employee._id (same /employees/me answer)
 class AdminSessionProfileService {
   final ApiClient _api = ApiClient();
 
@@ -54,6 +79,10 @@ class AdminSessionProfileService {
     var userId = '';
     var subRole = '';
 
+    // kept from the /employees/me answer (it also carries company + settings)
+    var company = <String, dynamic>{};
+    var rolePermissions = <String, dynamic>{};
+
     // 1) own profile
     var employeeDocId = '';
     try {
@@ -72,6 +101,9 @@ class AdminSessionProfileService {
       employeeDocId = _s(emp['_id']);
       userId = _first([_idOf(emp['userId']), user['_id'], user['id']]);
       subRole = _first([user['subRole'], res['subRole'], emp['subRole']]);
+
+      company = _m(res['company']);
+      rolePermissions = _m(_m(res['settings'])['rolePermissions']);
     } catch (e) {
       debugPrint('SESSION PROFILE: /employees/me failed: $e');
     }
@@ -95,6 +127,7 @@ class AdminSessionProfileService {
               name = _first([m['name'], itemUser is Map ? itemUser['name'] : null]);
               if (userId.isEmpty) userId = _idOf(itemUser);
               if (designation.isEmpty) designation = _s(m['designation']);
+              if (employeeDocId.isEmpty) employeeDocId = _s(m['_id']);
               break;
             }
           }
@@ -107,8 +140,11 @@ class AdminSessionProfileService {
     // 2) admin sub-role from the company (owner / hr / accountant / manager)
     if (subRole.isEmpty && role.toLowerCase() != 'employee' && userId.isNotEmpty) {
       try {
-        final res = _m(await _api.get('/companies/me'));
-        final company = res['company'] is Map ? _m(res['company']) : res;
+        // the company usually came with /employees/me already; ask again only if not
+        if (company.isEmpty) {
+          final res = _m(await _api.get('/companies/me'));
+          company = res['company'] is Map ? _m(res['company']) : res;
+        }
 
         if (_idOf(company['adminId']) == userId) {
           subRole = 'owner';
@@ -125,10 +161,32 @@ class AdminSessionProfileService {
       } catch (_) {}
     }
 
+    // always keep the sub-role in one clean form: hr, accountant, ...
+    subRole = subRole.trim().toLowerCase();
+
+    // 3) screens this sub-role may open (company's saved list)
+    var permissions = <String>[];
+    final rawList = rolePermissions[subRole];
+    if (rawList is List) {
+      permissions = rawList
+          .map((e) => _s(e).trim().toLowerCase())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+
+    debugPrint(
+      'SESSION PROFILE: role="$role" subRole="$subRole" '
+          'employeeId="$employeeDocId" permissions=$permissions',
+    );
+
     final label = _label(role, subRole, designation);
     return AdminSessionProfile(
       name: name.trim().isEmpty ? label : name.trim(),
       roleLabel: label,
+      role: role.trim().toLowerCase(),
+      subRole: subRole,
+      permissions: permissions,
+      employeeId: employeeDocId.trim(),
     );
   }
 
@@ -148,6 +206,9 @@ class AdminSessionProfileService {
     if (role.toLowerCase() == 'employee') {
       return designation.isNotEmpty ? designation : 'Employee';
     }
-    return designation.isNotEmpty ? designation : 'Admin';
+    // Admin whose sub-role is unknown. A plain "Admin" label is used (not the
+    // designation) so a job title like "Account Executive" can never be
+    // mistaken for the Accountant role.
+    return 'Admin';
   }
 }

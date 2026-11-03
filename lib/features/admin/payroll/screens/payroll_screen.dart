@@ -27,9 +27,16 @@ class PayrollScreen extends StatefulWidget {
   /// True when shown inside the admin dashboard (the sidebar stays visible).
   final bool embedded;
 
+  /// PERMISSION: false = view only. Hides / blocks Calculate & Generate,
+  /// Email All Payslips, PF refund, Set salary and Edit access.
+  /// Export Excel and viewing payslips / reports stay available.
+  /// The default is true (the old behaviour).
+  final bool canManage;
+
   const PayrollScreen({
     super.key,
     this.embedded = false,
+    this.canManage = true,
   });
 
   @override
@@ -83,6 +90,9 @@ class _PayrollScreenState extends State<PayrollScreen>
   bool _busy = false;
 
   bool get _isMobile => MediaQuery.of(context).size.width < _mobileBreakpoint;
+
+  /// PERMISSION: shortcut.
+  bool get _canManage => widget.canManage;
 
   /// The payroll rows with employee names filled in.
   List<PayrollSlip>? get _displaySlips {
@@ -233,6 +243,11 @@ class _PayrollScreenState extends State<PayrollScreen>
           backgroundColor: error ? _danger : null,
         ),
       );
+  }
+
+  /// PERMISSION: shown when a view-only role triggers a change.
+  void _viewOnlyToast() {
+    _toast('Your role can only view payroll.', error: true);
   }
 
   Future<bool> _confirm({
@@ -449,6 +464,7 @@ class _PayrollScreenState extends State<PayrollScreen>
   // ==========================================================
 
   Future<void> _generate() async {
+    if (!_canManage) return; // PERMISSION
     if (_busy) return;
 
     final ok = await _confirm(
@@ -492,6 +508,7 @@ class _PayrollScreenState extends State<PayrollScreen>
   }
 
   Future<void> _emailAll() async {
+    if (!_canManage) return; // PERMISSION
     if (_busy) return;
 
     final ok = await _confirm(
@@ -553,6 +570,10 @@ class _PayrollScreenState extends State<PayrollScreen>
   }
 
   Future<void> _refundPf(PfBalance balance) async {
+    if (!_canManage) {
+      _viewOnlyToast(); // PERMISSION
+      return;
+    }
     if (_busy) return;
 
     final ok = await _confirm(
@@ -588,6 +609,11 @@ class _PayrollScreenState extends State<PayrollScreen>
   }
 
   Future<void> _setSalary(Employee employee) async {
+    if (!_canManage) {
+      _viewOnlyToast(); // PERMISSION
+      return;
+    }
+
     final saved = await SetSalaryDialog.show(
       context,
       employeeId: employee.id,
@@ -637,6 +663,7 @@ class _PayrollScreenState extends State<PayrollScreen>
           // Employee list (always visible)
           const SizedBox(height: 16),
           EmployeeSalaryList(
+            canManage: _canManage, // PERMISSION
             employees: _employees,
             structures: _structures,
             loading: _employeesLoading,
@@ -645,6 +672,10 @@ class _PayrollScreenState extends State<PayrollScreen>
             onRetry: _loadEmployees,
             onSetSalary: _setSalary,
             onEditAccess: (e) {
+              if (!_canManage) {
+                _viewOnlyToast(); // PERMISSION
+                return;
+              }
               EmployeeAccessDialog.show(
                 context,
                 employeeName: e.name,
@@ -657,6 +688,10 @@ class _PayrollScreenState extends State<PayrollScreen>
               _toast('Profile view for ${e.name}');
             },
             onDelete: (e) async {
+              if (!_canManage) {
+                _viewOnlyToast(); // PERMISSION
+                return;
+              }
               final ok = await _confirm(
                 title: 'Delete Employee?',
                 message: 'Are you sure you want to delete ${e.name}?',
@@ -702,6 +737,33 @@ class _PayrollScreenState extends State<PayrollScreen>
   // ==========================================================
   // HEADER
   // ==========================================================
+
+  /// PERMISSION: small tag that tells a view-only role why there are no
+  /// Generate / Email buttons.
+  Widget _viewOnlyTag() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F2F4),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.visibility_outlined, size: 14, color: Color(0xFF8A93A1)),
+          SizedBox(width: 5),
+          Text(
+            'View only',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF4B5563),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _header(bool mobile) {
     final now = DateTime.now();
@@ -803,7 +865,17 @@ class _PayrollScreenState extends State<PayrollScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            title,
+            // PERMISSION: "View only" tag next to the title
+            if (_canManage)
+              title
+            else
+              Row(
+                children: [
+                  Expanded(child: title),
+                  const SizedBox(width: 8),
+                  _viewOnlyTag(),
+                ],
+              ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -813,15 +885,22 @@ class _PayrollScreenState extends State<PayrollScreen>
               ],
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(child: export),
-                const SizedBox(width: 10),
-                Expanded(child: email),
-              ],
-            ),
-            const SizedBox(height: 10),
-            generate,
+            // PERMISSION: Email All only for roles that may manage payroll
+            if (_canManage)
+              Row(
+                children: [
+                  Expanded(child: export),
+                  const SizedBox(width: 10),
+                  Expanded(child: email),
+                ],
+              )
+            else
+              export,
+            // PERMISSION: Calculate & Generate only for roles that may manage
+            if (_canManage) ...[
+              const SizedBox(height: 10),
+              generate,
+            ],
           ],
         ),
       );
@@ -842,8 +921,12 @@ class _PayrollScreenState extends State<PayrollScreen>
           year,
           const SizedBox(width: 20),
           export,
-          email,
-          generate,
+          // PERMISSION: only roles that may manage payroll
+          if (_canManage) ...[
+            email,
+            generate,
+          ] else
+            _viewOnlyTag(),
         ],
       ),
     );
@@ -974,6 +1057,7 @@ class _PayrollScreenState extends State<PayrollScreen>
           onRetry: _loadPf,
           onRefund: _refundPf,
           employees: _employees,
+          canManage: _canManage, // PERMISSION
         );
       default:
         return _batchTab();
@@ -1005,9 +1089,11 @@ class _PayrollScreenState extends State<PayrollScreen>
 
     if (slips.isEmpty && !_slipsLoading) {
       return _message(
-        text:
-        'No payroll has been generated for $_periodLabel yet. Press '
-            '"Calculate & Generate Payroll" to create it.',
+        // PERMISSION: a view-only role has no "Generate" button to press
+        text: _canManage
+            ? 'No payroll has been generated for $_periodLabel yet. Press '
+            '"Calculate & Generate Payroll" to create it.'
+            : 'No payroll has been generated for $_periodLabel yet.',
         icon: Icons.payments_outlined,
       );
     }

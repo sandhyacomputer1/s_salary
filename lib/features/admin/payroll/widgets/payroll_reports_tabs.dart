@@ -407,6 +407,8 @@ class _HeaderText extends StatelessWidget {
 // PF (5%) ACCUMULATION & REFUND HISTORY
 // =================================================================
 
+/// PERMISSION: [canManage] = false is view only. The refund buttons and the
+/// REFUND ACTION column are hidden. Default: true (old behaviour).
 class PayrollPfTab extends StatelessWidget {
   const PayrollPfTab({
     super.key,
@@ -417,6 +419,7 @@ class PayrollPfTab extends StatelessWidget {
     required this.onRetry,
     required this.onRefund,
     required this.employees,
+    this.canManage = true,
   });
 
   final PfReport? report;
@@ -426,6 +429,9 @@ class PayrollPfTab extends StatelessWidget {
   final VoidCallback onRetry;
   final ValueChanged<PfBalance> onRefund;
   final List<Employee> employees;
+
+  /// PERMISSION: false = view only (no refund).
+  final bool canManage;
 
   static const _months = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -466,7 +472,9 @@ class PayrollPfTab extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Shows 5% PF accumulated per employee across all months. Click "Refund Full PF Amount" when an employee leaves.',
+              canManage
+                  ? 'Shows 5% PF accumulated per employee across all months. Click "Refund Full PF Amount" when an employee leaves.'
+                  : 'Shows 5% PF accumulated per employee across all months.',
               style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 14),
@@ -480,17 +488,18 @@ class PayrollPfTab extends StatelessWidget {
               Column(children: [for (final b in data.balances) _balanceCard(b)])
             else
               _ScrollTable(
-                minWidth: 920,
+                minWidth: canManage ? 920 : 720,
                 child: Column(
                   children: [
-                    _tableHeader(const [
+                    _tableHeader(<(String, int, TextAlign)>[
                       ('EMPLOYEE NAME', 4, TextAlign.start),
                       ('CODE', 2, TextAlign.start),
                       ('STATUS', 2, TextAlign.start),
                       ('TOTAL 5% PF ACCUMULATED', 3, TextAlign.end),
                       ('REFUNDED AMOUNT', 3, TextAlign.end),
                       ('PENDING REFUND BALANCE', 3, TextAlign.end),
-                      ('REFUND ACTION', 4, TextAlign.center),
+                      // PERMISSION: refund column only for roles that manage
+                      if (canManage) ('REFUND ACTION', 4, TextAlign.center),
                     ]),
                     for (final b in data.balances) _balanceRow(b),
                   ],
@@ -702,7 +711,8 @@ class PayrollPfTab extends StatelessWidget {
             ),
           ],
         ),
-        if (b.canRefund) ...[
+        // PERMISSION: refund only for roles that manage payroll
+        if (b.canRefund && canManage) ...[
           const SizedBox(height: 12),
           _refundButton(b, expand: true),
         ],
@@ -771,14 +781,16 @@ class PayrollPfTab extends StatelessWidget {
               ),
             ),
           ),
-          Expanded(
-            flex: 4,
-            child: Center(
-              child: b.canRefund
-                  ? _refundButton(b)
-                  : const Text('-', style: TextStyle(color: _kMuted)),
+          // PERMISSION: refund cell only for roles that manage payroll
+          if (canManage)
+            Expanded(
+              flex: 4,
+              child: Center(
+                child: b.canRefund
+                    ? _refundButton(b)
+                    : const Text('-', style: TextStyle(color: _kMuted)),
+              ),
             ),
-          ),
         ],
       ),
     );

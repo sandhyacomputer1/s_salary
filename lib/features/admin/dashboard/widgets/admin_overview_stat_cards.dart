@@ -4,11 +4,19 @@ import '../../employees/widgets/admin_employee_theme.dart';
 
 /// ACTIVE EMPLOYEES (orange, "5 / 10") | PENDING LEAVES | PENDING EXPENSES | ARCHIVED EMPLOYEES
 /// 4 in a row on web, 2 x 2 on phones (smaller text, nothing is cut).
+///
+/// PERMISSION: each card can be hidden with its show... flag. Cards keep the
+/// same size whether 1 or 4 are shown.
 class AdminOverviewStatCards extends StatelessWidget {
   final String activeValue;
   final int pendingLeaves;
   final int pendingExpenses;
   final int archived;
+
+  final bool showActive;
+  final bool showLeaves;
+  final bool showExpenses;
+  final bool showArchived;
 
   const AdminOverviewStatCards({
     super.key,
@@ -16,6 +24,10 @@ class AdminOverviewStatCards extends StatelessWidget {
     required this.pendingLeaves,
     required this.pendingExpenses,
     required this.archived,
+    this.showActive = true,
+    this.showLeaves = true,
+    this.showExpenses = true,
+    this.showArchived = true,
   });
 
   @override
@@ -28,11 +40,13 @@ class AdminOverviewStatCards extends StatelessWidget {
         final w = (c.maxWidth - gap * (cols - 1)) / cols;
 
         final cards = <Widget>[
-          _card('ACTIVE EMPLOYEES', activeValue, wide, highlighted: true),
-          _card('PENDING LEAVES', '$pendingLeaves', wide),
-          _card('PENDING EXPENSES', '$pendingExpenses', wide),
-          _card('ARCHIVED EMPLOYEES', '$archived', wide),
+          if (showActive) _card('ACTIVE EMPLOYEES', activeValue, wide, highlighted: true),
+          if (showLeaves) _card('PENDING LEAVES', '$pendingLeaves', wide),
+          if (showExpenses) _card('PENDING EXPENSES', '$pendingExpenses', wide),
+          if (showArchived) _card('ARCHIVED EMPLOYEES', '$archived', wide),
         ];
+
+        if (cards.isEmpty) return const SizedBox.shrink();
 
         return Wrap(
           spacing: gap,
