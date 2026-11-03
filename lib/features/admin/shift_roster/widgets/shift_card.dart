@@ -7,6 +7,8 @@ import '../models/shift_model.dart';
 //
 //  - Web / tablet : fixed 268 px cards that sit side by side (Wrap).
 //  - Phone        : the card fills the full width of the section.
+//
+// PERMISSION: [canManage] = false is view only (no Edit / Delete buttons).
 // =================================================================
 
 class ShiftCard extends StatelessWidget {
@@ -33,6 +35,10 @@ class ShiftCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
+  /// PERMISSION: false = view only. Edit and Delete are hidden.
+  /// The default is true (the old behaviour).
+  final bool canManage;
+
   /// Optional: force a width (overrides the automatic one).
   final double? width;
 
@@ -42,6 +48,7 @@ class ShiftCard extends StatelessWidget {
     required this.accentColor,
     required this.onEdit,
     required this.onDelete,
+    this.canManage = true,
     this.width,
   });
 
@@ -170,52 +177,56 @@ class ShiftCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          const Divider(height: 1, color: divider),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_outlined, size: 15),
-                  label: const Text('Edit'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: textDark,
-                    side: const BorderSide(color: border),
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    textStyle: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline_rounded, size: 15),
-                  label: const Text('Delete'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: danger,
-                    side: BorderSide(color: danger.withOpacity(0.4)),
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    textStyle: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+
+          // PERMISSION: Edit / Delete only for roles that manage shifts
+          if (canManage) ...[
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: divider),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 15),
+                    label: const Text('Edit'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: textDark,
+                      side: const BorderSide(color: border),
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      textStyle: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_outline_rounded, size: 15),
+                    label: const Text('Delete'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: danger,
+                      side: BorderSide(color: danger.withOpacity(0.4)),
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      textStyle: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

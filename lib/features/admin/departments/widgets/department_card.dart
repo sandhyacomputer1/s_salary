@@ -19,6 +19,9 @@ const Color departmentBorder = Color(0xFFE2E8F0);
 // Uses the same Employee model used by EmployeeService.
 //
 // Employee API -> Employee
+//
+// PERMISSION: [canManage] = false is view only. Move, Edit and Delete are
+// hidden; View Staff stays.
 // ============================================================================
 
 class DepartmentCard extends StatelessWidget {
@@ -36,6 +39,9 @@ class DepartmentCard extends StatelessWidget {
 
   final ValueChanged<Employee>? onViewEmployee;
 
+  /// PERMISSION: false = view only. The default is true (the old behaviour).
+  final bool canManage;
+
   const DepartmentCard({
     super.key,
     required this.department,
@@ -46,6 +52,7 @@ class DepartmentCard extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     this.onViewEmployee,
+    this.canManage = true,
   });
 
   @override
@@ -152,6 +159,7 @@ class DepartmentCard extends StatelessWidget {
 
             // ================================================================
             // ACTION BUTTONS
+            // PERMISSION: a view-only role only gets View / Hide Staff
             // ================================================================
 
             Row(
@@ -166,30 +174,32 @@ class DepartmentCard extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(width: 8),
+                if (canManage) ...[
+                  const SizedBox(width: 8),
 
-                Expanded(
-                  child: _ActionButton(
-                    label: 'Move',
-                    icon: Icons.drive_file_move_outline,
-                    onPressed: onMove,
+                  Expanded(
+                    child: _ActionButton(
+                      label: 'Move',
+                      icon: Icons.drive_file_move_outline,
+                      onPressed: onMove,
+                    ),
                   ),
-                ),
 
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
 
-                _SmallActionButton(
-                  icon: Icons.edit_outlined,
-                  onPressed: onEdit,
-                ),
+                  _SmallActionButton(
+                    icon: Icons.edit_outlined,
+                    onPressed: onEdit,
+                  ),
 
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
 
-                _SmallActionButton(
-                  icon: Icons.delete_outline_rounded,
-                  onPressed: onDelete,
-                  danger: true,
-                ),
+                  _SmallActionButton(
+                    icon: Icons.delete_outline_rounded,
+                    onPressed: onDelete,
+                    danger: true,
+                  ),
+                ],
               ],
             ),
 

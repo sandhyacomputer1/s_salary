@@ -16,9 +16,15 @@ class DepartmentScreen extends StatefulWidget {
   /// True when shown inside the admin dashboard (the sidebar stays visible).
   final bool embedded;
 
+  /// PERMISSION: false = view only. Hides / blocks Create Department, Move,
+  /// Edit and Delete. Searching and View Staff stay available.
+  /// The default is true (the old behaviour).
+  final bool canManage;
+
   const DepartmentScreen({
     super.key,
     this.embedded = false,
+    this.canManage = true,
   });
 
   @override
@@ -43,6 +49,9 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
 
   bool get _isMobile =>
       MediaQuery.of(context).size.width < _mobileBreakpoint;
+
+  /// PERMISSION: shortcut.
+  bool get _canManage => widget.canManage;
 
   // ==========================================================================
   // SERVICES
@@ -273,10 +282,27 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
   }
 
   // ==========================================================================
+  // VIEW-ONLY MESSAGE
+  // ==========================================================================
+
+  /// PERMISSION: shown when a view-only role triggers a change.
+  void _viewOnlyMessage() {
+    _showMessage(
+      'Your role can only view departments.',
+      error: true,
+    );
+  }
+
+  // ==========================================================================
   // CREATE DEPARTMENT
   // ==========================================================================
 
   Future<void> _openCreateDialog() async {
+    if (!_canManage) {
+      _viewOnlyMessage(); // PERMISSION
+      return;
+    }
+
     final data =
     await showCreateDepartmentDialog(context);
 
@@ -320,6 +346,11 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
   Future<void> _openEditDialog(
       DepartmentModel department,
       ) async {
+    if (!_canManage) {
+      _viewOnlyMessage(); // PERMISSION
+      return;
+    }
+
     final data =
     await showEditDepartmentDialog(
       context,
@@ -369,6 +400,11 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
   Future<void> _confirmDelete(
       DepartmentModel department,
       ) async {
+    if (!_canManage) {
+      _viewOnlyMessage(); // PERMISSION
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -483,6 +519,11 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
   Future<void> _openMoveDialog(
       DepartmentModel currentDepartment,
       ) async {
+    if (!_canManage) {
+      _viewOnlyMessage(); // PERMISSION
+      return;
+    }
+
     if (_departments.isEmpty) return;
 
     final result =
@@ -840,6 +881,40 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
   // PAGE HEADER
   // ==========================================================================
 
+  /// PERMISSION: small tag that tells a view-only role why there is no
+  /// Create Department button.
+  Widget _viewOnlyTag() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F2F4),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.visibility_outlined,
+            size: 14,
+            color: _textLight,
+          ),
+          SizedBox(width: 5),
+          Text(
+            'View only',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: _textMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPageHeader(bool mobile) {
     final titleBlock = Column(
       crossAxisAlignment:
@@ -857,10 +932,13 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
 
         const SizedBox(height: 6),
 
-        const Text(
-          'Organize organizational structure '
-              'and assign employees to departments.',
-          style: TextStyle(
+        Text(
+          _canManage
+              ? 'Organize organizational structure '
+              'and assign employees to departments.'
+              : 'View the organizational structure '
+              'and the employees in each department.',
+          style: const TextStyle(
             fontSize: 13,
             color: _textLight,
           ),
@@ -969,10 +1047,14 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
           const SizedBox(height: 14),
           searchField,
           const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: createButton,
-          ),
+          // PERMISSION: a view-only role gets the tag instead of the button
+          if (_canManage)
+            SizedBox(
+              width: double.infinity,
+              child: createButton,
+            )
+          else
+            _viewOnlyTag(),
         ],
       );
     }
@@ -987,7 +1069,8 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
         const SizedBox(width: 16),
         searchField,
         const SizedBox(width: 10),
-        createButton,
+        // PERMISSION: a view-only role gets the tag instead of the button
+        if (_canManage) createButton else _viewOnlyTag(),
       ],
     );
   }
@@ -1050,6 +1133,8 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
                 ),
 
                 employees: staff,
+
+                canManage: _canManage, // PERMISSION
 
                 onViewStaff: () =>
                     _toggleStaff(
@@ -1144,33 +1229,39 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
           if (!hasQuery) ...[
             const SizedBox(height: 6),
 
-            const Text(
-              'Create your first department '
-                  'to get started.',
-              style: TextStyle(
+            Text(
+              _canManage
+                  ? 'Create your first department '
+                  'to get started.'
+                  : 'No departments have been '
+                  'created yet.',
+              style: const TextStyle(
                 fontSize: 12.5,
                 color: _textLight,
               ),
             ),
 
-            const SizedBox(height: 16),
+            // PERMISSION: only roles that manage departments can create one
+            if (_canManage) ...[
+              const SizedBox(height: 16),
 
-            FilledButton.icon(
-              onPressed:
-              _openCreateDialog,
-              icon: const Icon(
-                Icons.add_rounded,
-                size: 18,
+              FilledButton.icon(
+                onPressed:
+                _openCreateDialog,
+                icon: const Icon(
+                  Icons.add_rounded,
+                  size: 18,
+                ),
+                label: const Text(
+                  'Create Department',
+                ),
+                style:
+                FilledButton.styleFrom(
+                  backgroundColor:
+                  _primary,
+                ),
               ),
-              label: const Text(
-                'Create Department',
-              ),
-              style:
-              FilledButton.styleFrom(
-                backgroundColor:
-                _primary,
-              ),
-            ),
+            ],
           ],
         ],
       ),

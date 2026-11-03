@@ -494,6 +494,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   /// open Payroll only views.
   bool get _canManagePayroll => _canDo(AppModule.payroll, AppAction.edit);
 
+  /// Create / edit / delete shifts and assign rosters. Everyone else who can
+  /// open Shift Roster only views.
+  bool get _canManageShifts => _canDo(AppModule.shifts, AppAction.edit);
+  /// Create / edit / delete / move departments. Everyone else who can open
+  /// Departments only views.
+  bool get _canManageDepartments =>
+      _canDo(AppModule.departments, AppAction.edit);
+
+
   /// What this role may do with employees (Employees screen, Overview and
   /// the employee profile).
   AdminEmployeeAccess get _employeeAccess => AdminEmployeeAccess(
@@ -794,10 +803,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       // PERMISSION: view only unless this role may manage leaves
       return LeaveScreen(embedded: true, canManage: _canManageLeaves);
     }
-    if (_selectedScreenIndex == 4) return const ShiftRosterScreen(embedded: true);
+    if (_selectedScreenIndex == 4) {
+      // PERMISSION: view only unless this role may manage shifts
+      return ShiftRosterScreen(embedded: true, canManage: _canManageShifts);
+    }
     if (_selectedScreenIndex == 5) return const FieldTrackingScreen(embedded: true);
-    if (_selectedScreenIndex == 6) return const DepartmentScreen(embedded: true);
-    if (_selectedScreenIndex == 7) {
+    if (_selectedScreenIndex == 6) {
+      // PERMISSION: view only unless this role may manage departments
+      return DepartmentScreen(embedded: true, canManage: _canManageDepartments);
+    }    if (_selectedScreenIndex == 7) {
       // PERMISSION: view only unless this role may manage expenses
       return ExpenseScreen(embedded: true, canManage: _canManageExpenses);
     }

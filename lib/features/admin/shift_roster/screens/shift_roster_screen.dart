@@ -15,9 +15,15 @@ class ShiftRosterScreen extends StatefulWidget {
   /// True when shown inside the admin dashboard (the sidebar stays visible).
   final bool embedded;
 
+  /// PERMISSION: false = view only. Hides / blocks Create Shift, Assign
+  /// Shift Roster, Edit, Delete and removing roster schedules.
+  /// The default is true (the old behaviour).
+  final bool canManage;
+
   const ShiftRosterScreen({
     super.key,
     this.embedded = false,
+    this.canManage = true,
   });
 
   @override
@@ -41,6 +47,9 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
   static const Color _pageBg = Color(0xFFF7F8FA);
 
   bool get _isMobile => MediaQuery.of(context).size.width < _mobileBreakpoint;
+
+  /// PERMISSION: shortcut.
+  bool get _canManage => widget.canManage;
 
   static const List<Color> _shiftPalette = [
     Color(0xFFE96832),
@@ -194,7 +203,17 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
   // SHIFT ACTIONS
   // ==========================================================
 
+  /// PERMISSION: shown when a view-only role triggers a change.
+  void _viewOnlyMessage() {
+    _showMessage('Your role can only view the shift roster.');
+  }
+
   Future<void> _openCreateShiftDialog() async {
+    if (!_canManage) {
+      _viewOnlyMessage(); // PERMISSION
+      return;
+    }
+
     final data = await showCreateShiftDialog(context);
     if (data == null) return;
 
@@ -212,6 +231,11 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
   }
 
   Future<void> _openEditShiftDialog(ShiftModel shift) async {
+    if (!_canManage) {
+      _viewOnlyMessage(); // PERMISSION
+      return;
+    }
+
     final data = await showEditShiftDialog(context, shift);
     if (data == null) return;
 
@@ -229,6 +253,11 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
   }
 
   Future<void> _confirmDeleteShift(ShiftModel shift) async {
+    if (!_canManage) {
+      _viewOnlyMessage(); // PERMISSION
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -286,6 +315,11 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
   // ==========================================================
 
   Future<void> _openAssignRosterDialog() async {
+    if (!_canManage) {
+      _viewOnlyMessage(); // PERMISSION
+      return;
+    }
+
     if (_shifts.isEmpty) {
       _showMessage('Create a shift before assigning a roster schedule.');
       return;
@@ -340,6 +374,11 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
   }
 
   Future<void> _confirmDeleteRosterSchedule(RosterScheduleModel schedule) async {
+    if (!_canManage) {
+      _viewOnlyMessage(); // PERMISSION
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -539,6 +578,33 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
   // PAGE HEADER
   // ==========================================================
 
+  /// PERMISSION: small tag that tells a view-only role why there are no
+  /// Create / Assign buttons.
+  Widget _viewOnlyTag() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F2F4),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.visibility_outlined, size: 14, color: _textLight),
+          SizedBox(width: 5),
+          Text(
+            'View only',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: _textMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPageHeader(bool mobile) {
     final titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -552,13 +618,35 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
           ),
         ),
         const SizedBox(height: 6),
-        const Text(
-          'Configure morning, general, flexi, and overnight night shifts '
+        Text(
+          _canManage
+              ? 'Configure morning, general, flexi, and overnight night shifts '
+              'with grace times and assigned employee rosters.'
+              : 'View morning, general, flexi, and overnight night shifts '
               'with grace times and assigned employee rosters.',
-          style: TextStyle(fontSize: 13, color: _textLight),
+          style: const TextStyle(fontSize: 13, color: _textLight),
         ),
       ],
     );
+
+    // PERMISSION: a view-only role gets no action buttons, just the tag
+    if (!_canManage) {
+      if (mobile) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [titleBlock, const SizedBox(height: 12), _viewOnlyTag()],
+        );
+      }
+
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: titleBlock),
+          const SizedBox(width: 16),
+          _viewOnlyTag(),
+        ],
+      );
+    }
 
     final actions = Wrap(
       spacing: 10,
@@ -661,6 +749,7 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
                   return ShiftCard(
                     shift: shift,
                     accentColor: _shiftPalette[index % _shiftPalette.length],
+                    canManage: _canManage, // PERMISSION
                     onEdit: () => _openEditShiftDialog(shift),
                     onDelete: () => _confirmDeleteShift(shift),
                   );
@@ -701,17 +790,22 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Create your first shift to start building the roster.',
-            style: TextStyle(fontSize: 12.5, color: _textLight),
+          Text(
+            _canManage
+                ? 'Create your first shift to start building the roster.'
+                : 'No shifts have been configured yet.',
+            style: const TextStyle(fontSize: 12.5, color: _textLight),
           ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _openCreateShiftDialog,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Create Shift'),
-            style: FilledButton.styleFrom(backgroundColor: _primary),
-          ),
+          // PERMISSION: only roles that manage shifts can create one
+          if (_canManage) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _openCreateShiftDialog,
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Create Shift'),
+              style: FilledButton.styleFrom(backgroundColor: _primary),
+            ),
+          ],
         ],
       ),
     );
@@ -766,6 +860,7 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
             else
               RosterTable(
                 schedules: filtered,
+                // PERMISSION: a view-only role only gets a "view only" message
                 onDelete: _confirmDeleteRosterSchedule,
               ),
           ],
@@ -890,9 +985,11 @@ class _ShiftRosterScreenState extends State<ShiftRosterScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Assign a shift roster to see it listed here.',
-            style: TextStyle(fontSize: 12.5, color: _textLight),
+          Text(
+            _canManage
+                ? 'Assign a shift roster to see it listed here.'
+                : 'No roster schedules have been assigned yet.',
+            style: const TextStyle(fontSize: 12.5, color: _textLight),
           ),
         ],
       ),

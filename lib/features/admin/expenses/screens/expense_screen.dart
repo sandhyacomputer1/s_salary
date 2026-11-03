@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../employees/services/admin_csv_download.dart';
 import '../models/expense_model.dart';
 import '../services/expense_service.dart';
 import '../widgets/expense_card.dart';
+import '../widgets/expense_table.dart';
 import 'expense_details_screen.dart';
 
 class ExpenseScreen extends StatefulWidget {
@@ -32,6 +34,10 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
   String _searchQuery = '';
   String _selectedStatus = 'All';
+
+  /// Table: ids of the claims ticked with the checkboxes.
+  final Set<String> _selectedIds = {};
+  bool _bulkBusy = false;
 
   static const Color primary = Color(0xFFE96832);
   static const Color textDark = Color(0xFF18212F);
@@ -211,6 +217,182 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
     if (mounted) {
       _loadExpenses();
+    }
+  }
+
+  // ============================================================
+  // TABLE: selection, bulk approve / reject, export
+  // (new methods, nothing above was changed)
+  // ============================================================
+
+  void _toggleSelect(String id) {
+    setState(() {
+      if (!_selectedIds.remove(id)) _selectedIds.add(id);
+    });
+  }
+
+  /// Header checkbox: ticks / unticks every pending claim that is visible.
+  void _toggleSelectAll(bool selectAll) {
+    final pendingIds = _filteredExpenses
+        .where((e) => e.status.toLowerCase() == 'pending')
+        .map((e) => e.id);
+
+    setState(() {
+      if (selectAll) {
+        _selectedIds.addAll(pendingIds);
+      } else {
+        _selectedIds.removeAll(pendingIds);
+      }
+    });
+  }
+
+  /// Ticked claims that are still pending and visible in the table.
+  List<ExpenseModel> _selectedPending() {
+    return _filteredExpenses
+        .where((e) =>
+    e.status.toLowerCase() == 'pending' && _selectedIds.contains(e.id))
+        .toList();
+  }
+
+  void _snack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _bulkApprove() async {
+    if (!widget.canManage || _bulkBusy) return; // PERMISSION
+
+    final targets = _selectedPending();
+    if (targets.isEmpty) return;
+
+    setState(() => _bulkBusy = true);
+
+    var done = 0;
+    var failed = 0;
+    for (final expense in targets) {
+      try {
+        await _service.approveExpense(expense.id);
+        done++;
+      } catch (_) {
+        failed++;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _bulkBusy = false;
+      _selectedIds.clear();
+    });
+
+    _snack(failed == 0
+        ? '$done expense(s) approved successfully'
+        : '$done approved, $failed failed');
+
+    await _loadExpenses();
+  }
+
+  Future<void> _bulkReject() async {
+    if (!widget.canManage || _bulkBusy) return; // PERMISSION
+
+    final targets = _selectedPending();
+    if (targets.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reject selected expenses?'),
+        content: Text(
+          'Reject ${targets.length} selected claim(s)? '
+              'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: danger),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _bulkBusy = true);
+
+    var done = 0;
+    var failed = 0;
+    for (final expense in targets) {
+      try {
+        await _service.rejectExpense(expense.id);
+        done++;
+      } catch (_) {
+        failed++;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _bulkBusy = false;
+      _selectedIds.clear();
+    });
+
+    _snack(failed == 0
+        ? '$done expense(s) rejected'
+        : '$done rejected, $failed failed');
+
+    await _loadExpenses();
+  }
+
+  /// Exports the claims that are visible in the table (search + status filter).
+  Future<void> _exportCsv() async {
+    final rows = _filteredExpenses;
+
+    if (rows.isEmpty) {
+      _snack('No expenses to export');
+      return;
+    }
+
+    String cell(Object? v) => '"${(v ?? '').toString().replaceAll('"', '""')}"';
+    String two(int n) => n.toString().padLeft(2, '0');
+
+    String dateOf(DateTime? d) {
+      if (d == null) return '';
+      final u = d.toUtc();
+      return '${u.year}-${two(u.month)}-${two(u.day)}';
+    }
+
+    final lines = <String>[
+      'Employee,Employee Code,Category,Amount (₹),Date,Description,Status',
+      for (final e in rows)
+        [
+          e.employeeDisplayLabel,
+          e.employeeCode,
+          e.category,
+          e.amount.toStringAsFixed(e.amount.truncateToDouble() == e.amount ? 0 : 2),
+          dateOf(e.expenseDate),
+          e.description,
+          e.status,
+        ].map(cell).join(','),
+    ];
+
+    final now = DateTime.now();
+    final fileName = 'Expense_Claims_${now.year}-${two(now.month)}-${two(now.day)}.csv';
+
+    try {
+      // BOM first, so Excel shows the ₹ sign correctly
+      final downloaded = await adminSaveCsv(fileName, '\uFEFF${lines.join('\n')}');
+      if (!mounted) return;
+      _snack(downloaded
+          ? 'Expenses exported'
+          : 'CSV copied to clipboard (paste it into Excel / Sheets)');
+    } catch (e) {
+      if (!mounted) return;
+      _snack('Export failed: ${_errorText(e)}');
     }
   }
 
@@ -543,7 +725,8 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       );
     }
 
-    return Column(
+    // Phones / narrow screens: the same cards as before.
+    final cards = Column(
       children: [
         for (int i = 0; i < expenses.length; i++)
           ExpenseCard(
@@ -563,6 +746,29 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                 : null,
           ),
       ],
+    );
+
+    // Wide screens (web / tablet): the table like the web app.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) return cards;
+
+        return ExpenseTable(
+          expenses: expenses,
+          totalPending: _pendingCount,
+          selectedIds: _selectedIds,
+          canManage: widget.canManage,
+          busy: _bulkBusy,
+          onToggle: _toggleSelect,
+          onToggleAll: _toggleSelectAll,
+          onTap: _openDetails,
+          onApprove: _approveExpense,
+          onReject: _rejectExpense,
+          onExport: _exportCsv,
+          onBulkApprove: _bulkApprove,
+          onBulkReject: _bulkReject,
+        );
+      },
     );
   }
 
