@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../employees/services/admin_csv_download.dart';
 import '../models/leave_model.dart';
 import '../services/leave_service.dart';
 import '../widgets/leave_card.dart';
+import '../widgets/leave_table.dart';
 import 'leave_details_screen.dart';
 
 class LeaveScreen extends StatefulWidget {
@@ -33,6 +35,10 @@ class _LeaveScreenState extends State<LeaveScreen> {
 
   String _searchQuery = '';
   String _selectedStatus = 'All';
+
+  /// Table: ids of the requests ticked with the checkboxes.
+  final Set<String> _selectedIds = {};
+  bool _bulkBusy = false;
 
   static const Color primary = Color(0xFFE96832);
   static const Color textDark = Color(0xFF18212F);
@@ -227,6 +233,186 @@ class _LeaveScreenState extends State<LeaveScreen> {
   }
 
   // ==========================================================
+  // TABLE: selection, bulk approve / reject, export
+  // (new methods, nothing above was changed)
+  // ==========================================================
+
+  void _toggleSelect(String id) {
+    setState(() {
+      if (!_selectedIds.remove(id)) _selectedIds.add(id);
+    });
+  }
+
+  /// Header checkbox: ticks / unticks every pending request that is visible.
+  void _toggleSelectAll(bool selectAll) {
+    final pendingIds = _filteredLeaves
+        .where((l) => l.status.toLowerCase() == 'pending')
+        .map((l) => l.id);
+
+    setState(() {
+      if (selectAll) {
+        _selectedIds.addAll(pendingIds);
+      } else {
+        _selectedIds.removeAll(pendingIds);
+      }
+    });
+  }
+
+  /// Ticked requests that are still pending and visible in the table.
+  List<LeaveModel> _selectedPending() {
+    return _filteredLeaves
+        .where((l) =>
+    l.status.toLowerCase() == 'pending' && _selectedIds.contains(l.id))
+        .toList();
+  }
+
+  void _snack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _bulkApprove() async {
+    if (!widget.canManage || _bulkBusy) return; // PERMISSION
+
+    final targets = _selectedPending();
+    if (targets.isEmpty) return;
+
+    setState(() => _bulkBusy = true);
+
+    var done = 0;
+    var failed = 0;
+    for (final leave in targets) {
+      try {
+        await _service.approveLeave(leave.id);
+        done++;
+      } catch (_) {
+        failed++;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _bulkBusy = false;
+      _selectedIds.clear();
+    });
+
+    _snack(failed == 0
+        ? '$done leave request(s) approved successfully'
+        : '$done approved, $failed failed');
+
+    await _loadLeaves();
+  }
+
+  Future<void> _bulkReject() async {
+    if (!widget.canManage || _bulkBusy) return; // PERMISSION
+
+    final targets = _selectedPending();
+    if (targets.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reject selected leave requests?'),
+        content: Text(
+          'Reject ${targets.length} selected request(s)? '
+              'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: danger),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _bulkBusy = true);
+
+    var done = 0;
+    var failed = 0;
+    for (final leave in targets) {
+      try {
+        await _service.rejectLeave(leave.id);
+        done++;
+      } catch (_) {
+        failed++;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _bulkBusy = false;
+      _selectedIds.clear();
+    });
+
+    _snack(failed == 0
+        ? '$done leave request(s) rejected'
+        : '$done rejected, $failed failed');
+
+    await _loadLeaves();
+  }
+
+  /// Exports the requests that are visible in the table (search + status filter).
+  Future<void> _exportCsv() async {
+    final rows = _filteredLeaves;
+
+    if (rows.isEmpty) {
+      _snack('No leave requests to export');
+      return;
+    }
+
+    String cell(Object? v) => '"${(v ?? '').toString().replaceAll('"', '""')}"';
+    String two(int n) => n.toString().padLeft(2, '0');
+
+    String dateOf(DateTime? d) {
+      if (d == null) return '';
+      final u = d.toUtc();
+      return '${u.year}-${two(u.month)}-${two(u.day)}';
+    }
+
+    String days(double d) => d.truncateToDouble() == d ? d.toStringAsFixed(0) : d.toStringAsFixed(1);
+
+    final lines = <String>[
+      'Employee,Employee Code,Leave Type,Start Date,End Date,Days,Half Day,Paid,Reason,Status',
+      for (final l in rows)
+        [
+          l.employeeDisplayLabel,
+          l.employeeCode,
+          l.leaveType,
+          dateOf(l.startDate),
+          dateOf(l.endDate),
+          days(l.totalDays),
+          l.isHalfDay ? 'Yes' : 'No',
+          l.isPaid ? 'Yes' : 'No',
+          l.reason,
+          l.status,
+        ].map(cell).join(','),
+    ];
+
+    final now = DateTime.now();
+    final fileName = 'Leave_Requests_${now.year}-${two(now.month)}-${two(now.day)}.csv';
+
+    try {
+      final downloaded = await adminSaveCsv(fileName, '\uFEFF${lines.join('\n')}');
+      if (!mounted) return;
+      _snack(downloaded
+          ? 'Leave requests exported'
+          : 'CSV copied to clipboard (paste it into Excel / Sheets)');
+    } catch (e) {
+      if (!mounted) return;
+      _snack('Export failed: ${_errorText(e)}');
+    }
+  }
+
+  // ==========================================================
   // BUILD
   // ==========================================================
 
@@ -347,31 +533,6 @@ class _LeaveScreenState extends State<LeaveScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Leave Management',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: textDark,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                widget.canManage
-                    ? 'Review and manage employee leave requests.'
-                    : 'View employee leave requests.',
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: textMedium,
-                ),
-              ),
-            ],
-          ),
-        ),
         // PERMISSION: tells a view-only role why there are no buttons
         if (!widget.canManage)
           Container(
@@ -601,7 +762,8 @@ class _LeaveScreenState extends State<LeaveScreen> {
       );
     }
 
-    return Column(
+    // Phones / narrow screens: the same cards as before.
+    final cards = Column(
       children: [
         for (int i = 0; i < leaves.length; i++)
           LeaveCard(
@@ -621,6 +783,29 @@ class _LeaveScreenState extends State<LeaveScreen> {
                 : null,
           ),
       ],
+    );
+
+    // Wide screens (web / tablet): the table like the web app.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) return cards;
+
+        return LeaveTable(
+          leaves: leaves,
+          totalPending: _pendingCount,
+          selectedIds: _selectedIds,
+          canManage: widget.canManage,
+          busy: _bulkBusy,
+          onToggle: _toggleSelect,
+          onToggleAll: _toggleSelectAll,
+          onTap: _openDetails,
+          onApprove: _approveLeave,
+          onReject: _rejectLeave,
+          onExport: _exportCsv,
+          onBulkApprove: _bulkApprove,
+          onBulkReject: _bulkReject,
+        );
+      },
     );
   }
 }

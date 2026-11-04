@@ -1,55 +1,102 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../../data/models/employee.dart';
 import '../../../../data/services/employee_service.dart';
+import '../models/admin_employee_access.dart';
 import 'edit_employee_screen.dart';
 
+// ==========================================================
+// STYLE
+// ==========================================================
+
+const double _mobileBreakpoint = 700;
+const double _maxContentWidth = 1200;
+
+const Color _primary = Color(0xFFE96832);
+const Color _primaryLight = Color(0xFFFFF1EB);
+const Color _textDark = Color(0xFF18212F);
+const Color _textMedium = Color(0xFF4B5563);
+const Color _textLight = Color(0xFF8A93A1);
+const Color _border = Color(0xFFD9DEE5);
+const Color _divider = Color(0xFFE9ECF0);
+const Color _pageBackground = Color(0xFFF7F8FA);
+const Color _danger = Color(0xFFC62828);
+
+/// The sections of the employee details page.
+enum _DetailTab {
+  overview,
+  employment,
+  personal,
+  bank,
+  attendance,
+  leaves,
+  expenses,
+  payroll,
+}
+
+/// Employee details.
+///
+/// Two ways to show it:
+///  - `embedded: true`  -> inside the admin dashboard (the sidebar stays
+///    visible). No Scaffold of its own; [onBack] is called by the
+///    "← back" button and after an employee is archived.
+///  - `embedded: false` -> full screen with its own Scaffold (the old way,
+///    opened with Navigator.push).
+///
+/// PERMISSION: [access] decides what this role sees:
+///  - Edit button      -> canEdit
+///  - Archive button   -> canDelete
+///  - Attendance       -> canSeeAttendance
+///  - Leaves           -> canSeeLeaves
+///  - Expenses         -> canSeeExpenses
+///  - Payroll / salary -> canSeeSalary
+/// The default is full access (the old behaviour).
 class EmployeeDetailsScreen extends StatefulWidget {
   final Employee employee;
+  final AdminEmployeeAccess access;
+
+  /// true = shown inside the dashboard (sidebar stays visible).
+  final bool embedded;
+
+  /// Embedded only: called when the person taps back (or after archiving).
+  final VoidCallback? onBack;
+
+  /// Embedded only: text of the back button, e.g. "All Departments".
+  final String backLabel;
 
   const EmployeeDetailsScreen({
     super.key,
     required this.employee,
+    this.access = AdminEmployeeAccess.full,
+    this.embedded = false,
+    this.onBack,
+    this.backLabel = 'Back',
   });
 
   @override
   State<EmployeeDetailsScreen> createState() => _EmployeeDetailsScreenState();
 }
 
-class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
-    with SingleTickerProviderStateMixin {
-  // ==========================================================
-  // STYLE
-  // ==========================================================
-
-  static const double _mobileBreakpoint = 700;
-
-  static const Color _primary = Color(0xFFE96832);
-  static const Color _primaryLight = Color(0xFFFFF1EB);
-  static const Color _textDark = Color(0xFF18212F);
-  static const Color _textMedium = Color(0xFF4B5563);
-  static const Color _textLight = Color(0xFF8A93A1);
-  static const Color _border = Color(0xFFD9DEE5);
-  static const Color _divider = Color(0xFFE9ECF0);
-  static const Color _pageBackground = Color(0xFFF7F8FA);
-  static const Color _danger = Color(0xFFC62828);
-
-  bool get _isMobile => MediaQuery.of(context).size.width < _mobileBreakpoint;
-
+class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
   // ==========================================================
   // SERVICES / CONTROLLERS
   // ==========================================================
 
   final EmployeeService _employeeService = EmployeeService();
-
-  late final TabController _tabController;
+  final ScrollController _scrollController = ScrollController();
 
   // ==========================================================
   // STATE
   // ==========================================================
 
+  late final List<_DetailTab> _tabs;
+  _DetailTab _selectedTab = _DetailTab.overview;
+
   bool _isLoading = true;
   bool _isDeleting = false;
+  bool _hasData = false;
 
   String? _errorMessage;
 
@@ -72,23 +119,111 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
   void initState() {
     super.initState();
 
-    _tabController = TabController(length: 8, vsync: this);
+    _tabs = _visibleTabs();
 
     _loadEmployeeDetails();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  /// PERMISSION: only the sections this role may see.
+  List<_DetailTab> _visibleTabs() {
+    final a = widget.access;
+
+    return [
+      _DetailTab.overview,
+      _DetailTab.employment,
+      _DetailTab.personal,
+      _DetailTab.bank,
+      if (a.canSeeAttendance) _DetailTab.attendance,
+      if (a.canSeeLeaves) _DetailTab.leaves,
+      if (a.canSeeExpenses) _DetailTab.expenses,
+      if (a.canSeeSalary) _DetailTab.payroll,
+    ];
+  }
+
+  String _tabLabel(_DetailTab tab) {
+    switch (tab) {
+      case _DetailTab.overview:
+        return 'Overview';
+      case _DetailTab.employment:
+        return 'Employment';
+      case _DetailTab.personal:
+        return 'Personal';
+      case _DetailTab.bank:
+        return 'Bank Details';
+      case _DetailTab.attendance:
+        return 'Attendance';
+      case _DetailTab.leaves:
+        return 'Leaves';
+      case _DetailTab.expenses:
+        return 'Expenses';
+      case _DetailTab.payroll:
+        return 'Payroll';
+    }
+  }
+
+  IconData _tabIcon(_DetailTab tab) {
+    switch (tab) {
+      case _DetailTab.overview:
+        return Icons.dashboard_outlined;
+      case _DetailTab.employment:
+        return Icons.business_center_outlined;
+      case _DetailTab.personal:
+        return Icons.person_outline_rounded;
+      case _DetailTab.bank:
+        return Icons.account_balance_outlined;
+      case _DetailTab.attendance:
+        return Icons.access_time_outlined;
+      case _DetailTab.leaves:
+        return Icons.event_busy_outlined;
+      case _DetailTab.expenses:
+        return Icons.receipt_long_outlined;
+      case _DetailTab.payroll:
+        return Icons.payments_outlined;
+    }
+  }
+
+  int? _tabCount(_DetailTab tab) {
+    switch (tab) {
+      case _DetailTab.attendance:
+        return _attendance.length;
+      case _DetailTab.leaves:
+        return _leaves.length;
+      case _DetailTab.expenses:
+        return _expenses.length;
+      case _DetailTab.payroll:
+        return _payrolls.length + _salaryStructures.length;
+      default:
+        return null;
+    }
+  }
+
+  void _selectTab(_DetailTab tab) {
+    if (!_tabs.contains(tab) || tab == _selectedTab) return;
+    setState(() => _selectedTab = tab);
+  }
+
+  /// Back: inside the dashboard it calls [onBack]; full screen pops the route.
+  void _goBack() {
+    if (widget.embedded) {
+      widget.onBack?.call();
+    } else {
+      Navigator.maybePop(context);
+    }
   }
 
   // ==========================================================
   // LOAD
   // ==========================================================
 
-  Future<void> _loadEmployeeDetails() async {
-    if (mounted) {
+  /// [silent] = pull to refresh / after edit: the page stays on screen.
+  Future<void> _loadEmployeeDetails({bool silent = false}) async {
+    if (!silent && mounted) {
       setState(() {
         _isLoading = true;
         _errorMessage = null;
@@ -106,47 +241,57 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
       final user = response['user'];
       final company = response['company'];
 
-      _employeeData =
-      employee is Map ? Map<String, dynamic>.from(employee) : {};
+      final employeeData =
+      employee is Map ? Map<String, dynamic>.from(employee) : <String, dynamic>{};
 
-      _userData = user is Map ? Map<String, dynamic>.from(user) : {};
+      final userData =
+      user is Map ? Map<String, dynamic>.from(user) : <String, dynamic>{};
 
-      _companyData = company is Map ? Map<String, dynamic>.from(company) : {};
+      final companyData = company is Map
+          ? Map<String, dynamic>.from(company)
+          : <String, dynamic>{};
 
-      final personal = _employeeData['personalDetails'];
+      final personal = employeeData['personalDetails'];
 
-      _personalDetails =
-      personal is Map ? Map<String, dynamic>.from(personal) : {};
+      final personalDetails = personal is Map
+          ? Map<String, dynamic>.from(personal)
+          : <String, dynamic>{};
 
-      _attendance = response['attendance'] is List
-          ? List<dynamic>.from(response['attendance'])
-          : [];
-
-      _leaves = response['leaves'] is List
-          ? List<dynamic>.from(response['leaves'])
-          : [];
-
-      _expenses = response['expenses'] is List
-          ? List<dynamic>.from(response['expenses'])
-          : [];
-
-      _salaryStructures = response['salaryStructures'] is List
-          ? List<dynamic>.from(response['salaryStructures'])
-          : [];
-
-      _payrolls = response['payrolls'] is List
-          ? List<dynamic>.from(response['payrolls'])
-          : [];
+      List<dynamic> listOf(dynamic value) =>
+          value is List ? List<dynamic>.from(value) : <dynamic>[];
 
       setState(() {
+        _employeeData = employeeData;
+        _userData = userData;
+        _companyData = companyData;
+        _personalDetails = personalDetails;
+
+        _attendance = listOf(response['attendance']);
+        _leaves = listOf(response['leaves']);
+        _expenses = listOf(response['expenses']);
+        _salaryStructures = listOf(response['salaryStructures']);
+        _payrolls = listOf(response['payrolls']);
+
+        _hasData = true;
         _isLoading = false;
+        _errorMessage = null;
       });
     } catch (e) {
       if (!mounted) return;
 
+      final message = e.toString().replaceFirst('Exception: ', '');
+
+      // A quiet refresh must not wipe a working page.
+      if (silent && _hasData) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+        return;
+      }
+
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        _errorMessage = message;
       });
     }
   }
@@ -156,6 +301,8 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
   // ==========================================================
 
   Future<void> _openEditScreen() async {
+    if (!widget.access.canEdit) return; // PERMISSION
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -169,7 +316,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
     );
 
     if (result == true) {
-      await _loadEmployeeDetails();
+      await _loadEmployeeDetails(silent: true);
     }
   }
 
@@ -178,6 +325,8 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
   // ==========================================================
 
   Future<void> _archiveEmployee() async {
+    if (!widget.access.canDelete) return; // PERMISSION
+
     final name = _stringValue(
       _userData['name'],
       fallback: widget.employee.name,
@@ -249,7 +398,12 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
         ),
       );
 
-      Navigator.pop(context, true);
+      if (widget.embedded) {
+        // back to the list inside the dashboard
+        widget.onBack?.call();
+      } else {
+        Navigator.pop(context, true);
+      }
     } catch (e) {
       if (!mounted) return;
 
@@ -329,110 +483,174 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
     return 'Not available';
   }
 
+  String _initials(String name) {
+    final clean = name.trim();
+
+    if (clean.isEmpty || clean == 'Not available') {
+      return '?';
+    }
+
+    final parts = clean.split(RegExp(r'\s+'));
+
+    if (parts.length == 1) {
+      return parts[0][0].toUpperCase();
+    }
+
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
   // ==========================================================
   // BUILD
   // ==========================================================
 
   @override
   Widget build(BuildContext context) {
-    final mobile = _isMobile;
+    final media = MediaQuery.of(context);
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildPageHeader(mobile),
-            _buildProfileStrip(mobile),
-            if (_isLoading)
-              const Expanded(
-                child: Center(
-                  child: CircularProgressIndicator(color: _primary),
-                ),
-              )
-            else if (_errorMessage != null)
-              Expanded(child: _buildErrorState())
-            else ...[
-                _buildTabBar(),
-                Expanded(
-                  child: Container(
-                    color: Colors.white,
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildOverviewTab(mobile),
-                        _buildEmploymentTab(mobile),
-                        _buildPersonalTab(mobile),
-                        _buildBankTab(mobile),
-                        _buildAttendanceTab(mobile),
-                        _buildLeavesTab(mobile),
-                        _buildExpensesTab(mobile),
-                        _buildPayrollTab(mobile),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-          ],
+    // Large accessibility fonts must not break the layout on any platform.
+    return MediaQuery(
+      data: media.copyWith(
+        textScaler: media.textScaler.clamp(
+          minScaleFactor: 1.0,
+          maxScaleFactor: 1.2,
         ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Phone / wide layout is chosen from the space THIS page really
+          // has (inside the dashboard the sidebar takes part of the width).
+          final mobile = constraints.maxWidth < _mobileBreakpoint;
+
+          final content = Column(
+            children: [
+              _buildTopBar(mobile),
+              Expanded(child: _buildBody(mobile)),
+            ],
+          );
+
+          // Inside the dashboard: no Scaffold, the sidebar stays visible.
+          if (widget.embedded) {
+            return ColoredBox(color: _pageBackground, child: content);
+          }
+
+          return Scaffold(
+            backgroundColor: _pageBackground,
+            body: SafeArea(child: content),
+          );
+        },
       ),
     );
   }
 
   // ==========================================================
-  // PAGE HEADER
+  // TOP BAR
   // ==========================================================
 
-  Widget _buildPageHeader(bool mobile) {
+  Widget _viewOnlyTag() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F2F4),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.visibility_outlined, size: 14, color: _textLight),
+          SizedBox(width: 5),
+          Text(
+            'View only',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: _textMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopBar(bool mobile) {
     final busy = _isLoading || _isDeleting;
+    final canEdit = widget.access.canEdit;
+    final canDelete = widget.access.canDelete;
+    final embedded = widget.embedded;
 
     return Container(
       width: double.infinity,
-      height: 62,
+      height: embedded ? 58 : 62,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
           bottom: BorderSide(color: _border),
         ),
       ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: mobile ? 6 : 16),
-        child: Row(
-          children: [
+      padding: EdgeInsets.symmetric(
+        horizontal: mobile ? 4 : (embedded ? 20 : 16),
+      ),
+      child: Row(
+        children: [
+          if (embedded)
+          // Inside the dashboard: "← All Departments"
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _isDeleting ? null : _goBack,
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: Text(
+                    widget.backLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: _textMedium,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else ...[
             IconButton(
               tooltip: 'Back',
-              onPressed: _isDeleting
-                  ? null
-                  : () {
-                Navigator.pop(context);
-              },
+              onPressed: _isDeleting ? null : _goBack,
               icon: const Icon(
                 Icons.arrow_back_rounded,
-                size: 21,
+                size: 22,
                 color: _textDark,
               ),
             ),
-            const SizedBox(width: 2),
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: _primaryLight,
-                borderRadius: BorderRadius.circular(10),
+            if (!mobile) ...[
+              const SizedBox(width: 2),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _primaryLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.badge_outlined,
+                  color: _primary,
+                  size: 19,
+                ),
               ),
-              child: const Icon(
-                Icons.badge_outlined,
-                color: _primary,
-                size: 19,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
+              const SizedBox(width: 12),
+            ],
+            Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'Employee Details',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -442,20 +660,37 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
                       color: _textDark,
                     ),
                   ),
-                  SizedBox(height: 1),
-                  Text(
-                    'View profile, records and payroll information.',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _textLight,
+                  if (!mobile) ...[
+                    const SizedBox(height: 1),
+                    const Text(
+                      'View profile, records and payroll information.',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _textLight,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
-            if (mobile) ...[
+          ],
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: busy ? null : () => _loadEmployeeDetails(silent: true),
+            icon: const Icon(
+              Icons.refresh_rounded,
+              size: 22,
+              color: _textDark,
+            ),
+          ),
+          if (!canEdit && !canDelete) ...[
+            const SizedBox(width: 4),
+            _viewOnlyTag(),
+            const SizedBox(width: 6),
+          ] else if (mobile) ...[
+            if (canEdit)
               IconButton(
                 tooltip: 'Edit Employee',
                 onPressed: busy ? null : _openEditScreen,
@@ -465,6 +700,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
                   color: _textDark,
                 ),
               ),
+            if (canDelete)
               IconButton(
                 tooltip: 'Archive',
                 onPressed: busy ? null : _archiveEmployee,
@@ -480,7 +716,8 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
                   color: _danger,
                 ),
               ),
-            ] else ...[
+          ] else ...[
+            if (canDelete)
               OutlinedButton.icon(
                 onPressed: busy ? null : _archiveEmployee,
                 icon: _isDeleting
@@ -493,7 +730,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
                 label: const Text('Archive'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _danger,
-                  side: BorderSide(color: _danger.withOpacity(0.4)),
+                  side: BorderSide(color: _danger.withValues(alpha: 0.4)),
                   textStyle: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -507,7 +744,8 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+            if (canDelete && canEdit) const SizedBox(width: 10),
+            if (canEdit)
               FilledButton.icon(
                 onPressed: busy ? null : _openEditScreen,
                 icon: const Icon(Icons.edit_outlined, size: 18),
@@ -528,19 +766,74 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-            ],
+            const SizedBox(width: 4),
           ],
-        ),
+        ],
       ),
     );
   }
 
   // ==========================================================
-  // PROFILE STRIP
+  // BODY
   // ==========================================================
 
-  Widget _buildProfileStrip(bool mobile) {
+  Widget _buildBody(bool mobile) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: _primary),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return _buildErrorState();
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final basePad = mobile ? 14.0 : 24.0;
+
+        // Inside the dashboard the page uses the full width next to the
+        // sidebar (like the other screens). Full screen on a very wide
+        // display: the content is centered.
+        final side = widget.embedded
+            ? basePad
+            : math.max(basePad, (width - _maxContentWidth) / 2);
+
+        return RefreshIndicator(
+          color: _primary,
+          onRefresh: () => _loadEmployeeDetails(silent: true),
+          child: Scrollbar(
+            controller: _scrollController,
+            child: ListView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(side, mobile ? 14 : 22, side, 36),
+              children: [
+                _buildHeroCard(mobile),
+                SizedBox(height: mobile ? 14 : 18),
+                _buildTabSelector(mobile),
+                SizedBox(height: mobile ? 14 : 18),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: KeyedSubtree(
+                    key: ValueKey<_DetailTab>(_selectedTab),
+                    child: _buildTabContent(_selectedTab),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ==========================================================
+  // HERO CARD
+  // ==========================================================
+
+  Widget _buildHeroCard(bool mobile) {
     final name = _stringValue(
       _userData['name'],
       fallback: widget.employee.name,
@@ -566,96 +859,123 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
       fallback: widget.employee.status,
     );
 
+    final email = _stringValue(_userData['email']);
+    final phone = _stringValue(_userData['phone']);
+    final workMode = _formatValue(_employeeData['workMode']);
+
     final subtitle = [designation, department]
         .where((value) => value != 'Not available')
         .join('  •  ');
 
+    final avatar = Container(
+      width: mobile ? 56 : 72,
+      height: mobile ? 56 : 72,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(mobile ? 14 : 18),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFF7A1A), Color(0xFFE0501E)],
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33E96832),
+            blurRadius: 12,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        _initials(name),
+        style: TextStyle(
+          fontSize: mobile ? 20 : 26,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+        ),
+      ),
+    );
+
+    final info = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              name,
+              style: TextStyle(
+                fontSize: mobile ? 20 : 26,
+                fontWeight: FontWeight.w800,
+                color: _textDark,
+              ),
+            ),
+            _Badge(text: _formatValue(status)),
+          ],
+        ),
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: mobile ? 13 : 14.5,
+              color: _textMedium,
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (code != 'Not available')
+              _metaChip(Icons.badge_outlined, code),
+            if (email != 'Not available')
+              _metaChip(Icons.email_outlined, email),
+            if (phone != 'Not available')
+              _metaChip(Icons.phone_outlined, phone),
+            if (workMode != 'Not available')
+              _metaChip(Icons.location_on_outlined, workMode),
+          ],
+        ),
+      ],
+    );
+
     return Container(
       width: double.infinity,
-      color: Colors.white,
-      padding: EdgeInsets.fromLTRB(
-        mobile ? 14 : 24,
-        mobile ? 14 : 18,
-        mobile ? 14 : 24,
-        mobile ? 12 : 16,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _divider),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 14,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
         children: [
           Container(
-            width: mobile ? 52 : 60,
-            height: mobile ? 52 : 60,
-            decoration: BoxDecoration(
-              color: _primaryLight,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Center(
-              child: Text(
-                _initials(name),
-                style: TextStyle(
-                  fontSize: mobile ? 19 : 22,
-                  fontWeight: FontWeight.w700,
-                  color: _primary,
-                ),
+            height: 5,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFFF7A1A), Color(0xFFE96832)],
               ),
             ),
           ),
-          SizedBox(width: mobile ? 12 : 16),
-          Expanded(
-            child: Column(
+          Padding(
+            padding: EdgeInsets.all(mobile ? 16 : 24),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: mobile ? 19 : 23,
-                    fontWeight: FontWeight.w700,
-                    color: _textDark,
-                  ),
-                ),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: mobile ? 13 : 14.5,
-                      color: _textMedium,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (code != 'Not available')
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _pageBackground,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: _divider),
-                        ),
-                        child: Text(
-                          code,
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: _textMedium,
-                          ),
-                        ),
-                      ),
-                    _Badge(text: _formatValue(status)),
-                  ],
-                ),
+                avatar,
+                SizedBox(width: mobile ? 14 : 20),
+                Expanded(child: info),
               ],
             ),
           ),
@@ -664,255 +984,313 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
     );
   }
 
-  // ==========================================================
-  // TAB BAR
-  // ==========================================================
-
-  Widget _tab(String label, {int? count}) {
-    return Tab(
-      height: 46,
+  Widget _metaChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _pageBackground,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _divider),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label),
-          if (count != null) ...[
-            const SizedBox(width: 7),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 7,
-                vertical: 2,
+          Icon(icon, size: 14, color: _textLight),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: _textMedium,
               ),
-              decoration: BoxDecoration(
-                color: _pageBackground,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _divider),
-              ),
-              child: Text(
-                count.toString(),
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: _textMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================================
+  // SECTION SELECTOR (pills)
+  // ==========================================================
+
+  Widget _buildTabSelector(bool mobile) {
+    Widget pill(_DetailTab tab) {
+      final selected = tab == _selectedTab;
+      final count = _tabCount(tab);
+
+      return Material(
+        color: selected ? _primary : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => _selectTab(tab),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: selected ? _primary : _border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _tabIcon(tab),
+                  size: 16,
+                  color: selected ? Colors.white : _textMedium,
                 ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTabBar() {
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: _divider),
-          bottom: BorderSide(color: _border),
-        ),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        isScrollable: true,
-        labelColor: _primary,
-        unselectedLabelColor: _textMedium,
-        indicatorColor: _primary,
-        indicatorWeight: 2.5,
-        labelPadding: const EdgeInsets.symmetric(horizontal: 18),
-        labelStyle: const TextStyle(
-          fontSize: 14.5,
-          fontWeight: FontWeight.w700,
-        ),
-        unselectedLabelStyle: const TextStyle(
-          fontSize: 14.5,
-          fontWeight: FontWeight.w600,
-        ),
-        tabs: [
-          _tab('Overview'),
-          _tab('Employment'),
-          _tab('Personal'),
-          _tab('Bank Details'),
-          _tab('Attendance', count: _attendance.length),
-          _tab('Leaves', count: _leaves.length),
-          _tab('Expenses', count: _expenses.length),
-          _tab(
-            'Payroll',
-            count: _payrolls.length + _salaryStructures.length,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==========================================================
-  // TAB WRAPPER (each tab scrolls + pull to refresh)
-  // ==========================================================
-
-  Widget _tabScroll(bool mobile, List<Widget> children) {
-    return RefreshIndicator(
-      color: _primary,
-      onRefresh: _loadEmployeeDetails,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          mobile ? 14 : 24,
-          20,
-          mobile ? 14 : 24,
-          30,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: children,
-        ),
-      ),
-    );
-  }
-
-  // ==========================================================
-  // OVERVIEW TAB
-  // ==========================================================
-
-  Widget _buildOverviewTab(bool mobile) {
-    return _tabScroll(mobile, [
-      _section(
-        title: 'Summary',
-        child: _grid([
-          _statTile(
-            'Attendance Records',
-            _attendance.length,
-            Icons.access_time_outlined,
-            4,
-          ),
-          _statTile(
-            'Leave Records',
-            _leaves.length,
-            Icons.event_busy_outlined,
-            5,
-          ),
-          _statTile(
-            'Expense Records',
-            _expenses.length,
-            Icons.receipt_long_outlined,
-            6,
-          ),
-          _statTile(
-            'Salary Structures',
-            _salaryStructures.length,
-            Icons.payments_outlined,
-            7,
-          ),
-          _statTile(
-            'Payroll Records',
-            _payrolls.length,
-            Icons.account_balance_wallet_outlined,
-            7,
-          ),
-        ]),
-      ),
-      _section(
-        title: 'Key Details',
-        last: true,
-        child: _grid([
-          _field(
-            'Employee Code',
-            _stringValue(_employeeData['employeeCode']),
-            Icons.badge_outlined,
-          ),
-          _field(
-            'Designation',
-            _stringValue(_employeeData['designation']),
-            Icons.workspace_premium_outlined,
-          ),
-          _field(
-            'Department',
-            _stringValue(_employeeData['department']),
-            Icons.account_tree_outlined,
-          ),
-          _field(
-            'Employment Type',
-            _formatValue(_employeeData['employmentType']),
-            Icons.business_center_outlined,
-          ),
-          _field(
-            'Work Mode',
-            _formatValue(_employeeData['workMode']),
-            Icons.location_on_outlined,
-          ),
-          _field(
-            'Date of Joining',
-            _formatDate(_employeeData['dateOfJoining']),
-            Icons.calendar_month_outlined,
-          ),
-          _field(
-            'Email',
-            _stringValue(_userData['email']),
-            Icons.email_outlined,
-          ),
-          _field(
-            'Phone',
-            _stringValue(_userData['phone']),
-            Icons.phone_outlined,
-          ),
-        ]),
-      ),
-    ]);
-  }
-
-  Widget _statTile(String label, int value, IconData icon, int tabIndex) {
-    return InkWell(
-      onTap: () => _tabController.animateTo(tabIndex),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: _primaryLight,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, size: 21, color: _primary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    value.toString(),
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      height: 1.1,
-                      color: _textDark,
-                    ),
+                const SizedBox(width: 7),
+                Text(
+                  _tabLabel(tab),
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? Colors.white : _textDark,
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w500,
-                      color: _textLight,
+                ),
+                if (count != null) ...[
+                  const SizedBox(width: 7),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? Colors.white.withValues(alpha: 0.25)
+                          : _pageBackground,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      count.toString(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? Colors.white : _textMedium,
+                      ),
                     ),
                   ),
                 ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Phone: one row you can swipe sideways.
+    if (mobile) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final tab in _tabs)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: pill(tab),
+              ),
+          ],
+        ),
+      );
+    }
+
+    // Web / tablet: all pills visible, wrapping onto a second row if needed
+    // (no sideways scrolling, so it works with a mouse too).
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [for (final tab in _tabs) pill(tab)],
+    );
+  }
+
+  // ==========================================================
+  // SECTION CONTENT
+  // ==========================================================
+
+  Widget _buildTabContent(_DetailTab tab) {
+    switch (tab) {
+      case _DetailTab.overview:
+        return _buildOverviewTab();
+      case _DetailTab.employment:
+        return _buildEmploymentTab();
+      case _DetailTab.personal:
+        return _buildPersonalTab();
+      case _DetailTab.bank:
+        return _buildBankTab();
+      case _DetailTab.attendance:
+        return _buildAttendanceTab();
+      case _DetailTab.leaves:
+        return _buildLeavesTab();
+      case _DetailTab.expenses:
+        return _buildExpensesTab();
+      case _DetailTab.payroll:
+        return _buildPayrollTab();
+    }
+  }
+
+  // ---------------- OVERVIEW ----------------
+
+  Widget _buildOverviewTab() {
+    final a = widget.access;
+
+    final stats = <Widget>[
+      if (a.canSeeAttendance)
+        _statTile(
+          'Attendance Records',
+          _attendance.length,
+          Icons.access_time_outlined,
+          _DetailTab.attendance,
+        ),
+      if (a.canSeeLeaves)
+        _statTile(
+          'Leave Records',
+          _leaves.length,
+          Icons.event_busy_outlined,
+          _DetailTab.leaves,
+        ),
+      if (a.canSeeExpenses)
+        _statTile(
+          'Expense Records',
+          _expenses.length,
+          Icons.receipt_long_outlined,
+          _DetailTab.expenses,
+        ),
+      if (a.canSeeSalary) ...[
+        _statTile(
+          'Salary Structures',
+          _salaryStructures.length,
+          Icons.payments_outlined,
+          _DetailTab.payroll,
+        ),
+        _statTile(
+          'Payroll Records',
+          _payrolls.length,
+          Icons.account_balance_wallet_outlined,
+          _DetailTab.payroll,
+        ),
+      ],
+    ];
+
+    return Column(
+      children: [
+        if (stats.isNotEmpty)
+          _card(
+            title: 'Summary',
+            icon: Icons.insights_outlined,
+            child: _grid(stats, maxColumns: 5, minItemWidth: 150),
+          ),
+        _card(
+          title: 'Key Details',
+          icon: Icons.badge_outlined,
+          child: _grid([
+            _field(
+              'Employee Code',
+              _stringValue(_employeeData['employeeCode']),
+              Icons.badge_outlined,
+            ),
+            _field(
+              'Designation',
+              _stringValue(_employeeData['designation']),
+              Icons.workspace_premium_outlined,
+            ),
+            _field(
+              'Department',
+              _stringValue(_employeeData['department']),
+              Icons.account_tree_outlined,
+            ),
+            _field(
+              'Employment Type',
+              _formatValue(_employeeData['employmentType']),
+              Icons.business_center_outlined,
+            ),
+            _field(
+              'Work Mode',
+              _formatValue(_employeeData['workMode']),
+              Icons.location_on_outlined,
+            ),
+            _field(
+              'Date of Joining',
+              _formatDate(_employeeData['dateOfJoining']),
+              Icons.calendar_month_outlined,
+            ),
+            _field(
+              'Email',
+              _stringValue(_userData['email']),
+              Icons.email_outlined,
+            ),
+            _field(
+              'Phone',
+              _stringValue(_userData['phone']),
+              Icons.phone_outlined,
+            ),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  Widget _statTile(
+      String label,
+      int value,
+      IconData icon,
+      _DetailTab target,
+      ) {
+    return InkWell(
+      onTap: () => _selectTab(target),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: _primaryLight,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(icon, size: 19, color: _primary),
+                ),
+                const Spacer(),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: Color(0xFFB6BDC8),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              value.toString(),
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                height: 1.1,
+                color: _textDark,
               ),
             ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: Color(0xFFB6BDC8),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                color: _textLight,
+              ),
             ),
           ],
         ),
@@ -920,222 +1298,216 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
     );
   }
 
-  // ==========================================================
-  // EMPLOYMENT TAB
-  // ==========================================================
+  // ---------------- EMPLOYMENT ----------------
 
-  Widget _buildEmploymentTab(bool mobile) {
-    return _tabScroll(mobile, [
-      _section(
-        title: 'Employment Information',
-        child: _grid([
-          _field(
-            'Employee Code',
-            _stringValue(_employeeData['employeeCode']),
-            Icons.badge_outlined,
-          ),
-          _field(
-            'Designation',
-            _stringValue(_employeeData['designation']),
-            Icons.workspace_premium_outlined,
-          ),
-          _field(
-            'Department',
-            _stringValue(_employeeData['department']),
-            Icons.account_tree_outlined,
-          ),
-          _field(
-            'Employment Type',
-            _formatValue(_employeeData['employmentType']),
-            Icons.business_center_outlined,
-          ),
-          _field(
-            'Work Mode',
-            _formatValue(_employeeData['workMode']),
-            Icons.location_on_outlined,
-          ),
-          _field(
-            'Date of Joining',
-            _formatDate(_employeeData['dateOfJoining']),
-            Icons.calendar_month_outlined,
-          ),
-          _field(
-            'Status',
-            _formatValue(_employeeData['status']),
-            Icons.toggle_on_outlined,
-          ),
-        ]),
-      ),
-      _section(
-        title: 'Company',
-        last: true,
-        child: _grid([
-          _field(
-            'Company Name',
-            _stringValue(_companyData['name']),
-            Icons.business,
-          ),
-          _field(
-            'Company Address',
-            _stringValue(_companyData['address']),
-            Icons.location_city_outlined,
-          ),
-          _field(
-            'Timezone',
-            _stringValue(_companyData['timezone']),
-            Icons.access_time_outlined,
-          ),
-        ]),
-      ),
-    ]);
-  }
-
-  // ==========================================================
-  // PERSONAL TAB
-  // ==========================================================
-
-  Widget _buildPersonalTab(bool mobile) {
-    return _tabScroll(mobile, [
-      _section(
-        title: 'Contact Information',
-        child: _grid([
-          _field(
-            'Email',
-            _stringValue(_userData['email']),
-            Icons.email_outlined,
-          ),
-          _field(
-            'Phone',
-            _stringValue(_userData['phone']),
-            Icons.phone_outlined,
-          ),
-          _field(
-            'Address',
-            _stringValue(_personalDetails['address']),
-            Icons.home_outlined,
-          ),
-        ]),
-      ),
-      _section(
-        title: 'Personal Information',
-        last: true,
-        child: _grid([
-          _field(
-            'Gender',
-            _stringValue(_personalDetails['gender']),
-            Icons.person_outline,
-          ),
-          _field(
-            'Date of Birth',
-            _formatDate(_personalDetails['dob']),
-            Icons.cake_outlined,
-          ),
-        ]),
-      ),
-    ]);
-  }
-
-  // ==========================================================
-  // BANK TAB
-  // ==========================================================
-
-  Widget _buildBankTab(bool mobile) {
-    return _tabScroll(mobile, [
-      _section(
-        title: 'Bank Details',
-        last: true,
-        child: _grid([
-          _field(
-            'Account Number',
-            _bankValue('accountNumber'),
-            Icons.account_balance,
-          ),
-          _field(
-            'IFSC Code',
-            _bankValue('ifsc'),
-            Icons.numbers,
-          ),
-          _field(
-            'Bank Name',
-            _bankValue('bankName'),
-            Icons.account_balance_outlined,
-          ),
-          _field(
-            'UPI ID',
-            _bankValue('upiId'),
-            Icons.payment_outlined,
-          ),
-        ]),
-      ),
-    ]);
-  }
-
-  // ==========================================================
-  // RECORD TABS
-  // ==========================================================
-
-  Widget _buildAttendanceTab(bool mobile) {
-    return _tabScroll(mobile, [
-      _section(
-        title: 'Attendance Records (${_attendance.length})',
-        last: true,
-        child: _recordsView(
-          _attendance,
-          emptyText: 'No attendance records found.',
-          emptyIcon: Icons.access_time_outlined,
+  Widget _buildEmploymentTab() {
+    return Column(
+      children: [
+        _card(
+          title: 'Employment Information',
+          icon: Icons.business_center_outlined,
+          child: _grid([
+            _field(
+              'Employee Code',
+              _stringValue(_employeeData['employeeCode']),
+              Icons.badge_outlined,
+            ),
+            _field(
+              'Designation',
+              _stringValue(_employeeData['designation']),
+              Icons.workspace_premium_outlined,
+            ),
+            _field(
+              'Department',
+              _stringValue(_employeeData['department']),
+              Icons.account_tree_outlined,
+            ),
+            _field(
+              'Employment Type',
+              _formatValue(_employeeData['employmentType']),
+              Icons.business_center_outlined,
+            ),
+            _field(
+              'Work Mode',
+              _formatValue(_employeeData['workMode']),
+              Icons.location_on_outlined,
+            ),
+            _field(
+              'Date of Joining',
+              _formatDate(_employeeData['dateOfJoining']),
+              Icons.calendar_month_outlined,
+            ),
+            _field(
+              'Status',
+              _formatValue(_employeeData['status']),
+              Icons.toggle_on_outlined,
+            ),
+          ]),
         ),
-      ),
-    ]);
+        _card(
+          title: 'Company',
+          icon: Icons.business,
+          child: _grid([
+            _field(
+              'Company Name',
+              _stringValue(_companyData['name']),
+              Icons.business,
+            ),
+            _field(
+              'Company Address',
+              _stringValue(_companyData['address']),
+              Icons.location_city_outlined,
+            ),
+            _field(
+              'Timezone',
+              _stringValue(_companyData['timezone']),
+              Icons.access_time_outlined,
+            ),
+          ]),
+        ),
+      ],
+    );
   }
 
-  Widget _buildLeavesTab(bool mobile) {
-    return _tabScroll(mobile, [
-      _section(
-        title: 'Leave Records (${_leaves.length})',
-        last: true,
-        child: _recordsView(
-          _leaves,
-          emptyText: 'No leave records found.',
-          emptyIcon: Icons.event_busy_outlined,
+  // ---------------- PERSONAL ----------------
+
+  Widget _buildPersonalTab() {
+    return Column(
+      children: [
+        _card(
+          title: 'Contact Information',
+          icon: Icons.contact_phone_outlined,
+          child: _grid([
+            _field(
+              'Email',
+              _stringValue(_userData['email']),
+              Icons.email_outlined,
+            ),
+            _field(
+              'Phone',
+              _stringValue(_userData['phone']),
+              Icons.phone_outlined,
+            ),
+            _field(
+              'Address',
+              _stringValue(_personalDetails['address']),
+              Icons.home_outlined,
+            ),
+          ]),
         ),
-      ),
-    ]);
+        _card(
+          title: 'Personal Information',
+          icon: Icons.person_outline_rounded,
+          child: _grid([
+            _field(
+              'Gender',
+              _stringValue(_personalDetails['gender']),
+              Icons.person_outline,
+            ),
+            _field(
+              'Date of Birth',
+              _formatDate(_personalDetails['dob']),
+              Icons.cake_outlined,
+            ),
+          ]),
+        ),
+      ],
+    );
   }
 
-  Widget _buildExpensesTab(bool mobile) {
-    return _tabScroll(mobile, [
-      _section(
-        title: 'Expense Records (${_expenses.length})',
-        last: true,
-        child: _recordsView(
-          _expenses,
-          emptyText: 'No expense records found.',
-          emptyIcon: Icons.receipt_long_outlined,
+  // ---------------- BANK ----------------
+
+  Widget _buildBankTab() {
+    return _card(
+      title: 'Bank Details',
+      icon: Icons.account_balance_outlined,
+      child: _grid([
+        // The account number is hidden until the eye icon is tapped.
+        _MaskedFieldTile(
+          label: 'Account Number',
+          value: _bankValue('accountNumber'),
+          icon: Icons.account_balance,
         ),
-      ),
-    ]);
+        _field(
+          'IFSC Code',
+          _bankValue('ifsc'),
+          Icons.numbers,
+        ),
+        _field(
+          'Bank Name',
+          _bankValue('bankName'),
+          Icons.account_balance_outlined,
+        ),
+        _field(
+          'UPI ID',
+          _bankValue('upiId'),
+          Icons.payment_outlined,
+        ),
+      ]),
+    );
   }
 
-  Widget _buildPayrollTab(bool mobile) {
-    return _tabScroll(mobile, [
-      _section(
-        title: 'Salary Structures (${_salaryStructures.length})',
-        child: _recordsView(
-          _salaryStructures,
-          emptyText: 'No salary structures found.',
-          emptyIcon: Icons.payments_outlined,
-        ),
+  // ---------------- RECORD SECTIONS ----------------
+
+  Widget _buildAttendanceTab() {
+    return _card(
+      title: 'Attendance Records (${_attendance.length})',
+      icon: Icons.access_time_outlined,
+      child: _recordsView(
+        _attendance,
+        emptyText: 'No attendance records found.',
+        emptyIcon: Icons.access_time_outlined,
       ),
-      _section(
-        title: 'Payroll Records (${_payrolls.length})',
-        last: true,
-        child: _recordsView(
-          _payrolls,
-          emptyText: 'No payroll records found.',
-          emptyIcon: Icons.account_balance_wallet_outlined,
-        ),
+    );
+  }
+
+  Widget _buildLeavesTab() {
+    return _card(
+      title: 'Leave Records (${_leaves.length})',
+      icon: Icons.event_busy_outlined,
+      child: _recordsView(
+        _leaves,
+        emptyText: 'No leave records found.',
+        emptyIcon: Icons.event_busy_outlined,
       ),
-    ]);
+    );
+  }
+
+  Widget _buildExpensesTab() {
+    return _card(
+      title: 'Expense Records (${_expenses.length})',
+      icon: Icons.receipt_long_outlined,
+      child: _recordsView(
+        _expenses,
+        emptyText: 'No expense records found.',
+        emptyIcon: Icons.receipt_long_outlined,
+      ),
+    );
+  }
+
+  Widget _buildPayrollTab() {
+    return Column(
+      children: [
+        _card(
+          title: 'Salary Structures (${_salaryStructures.length})',
+          icon: Icons.payments_outlined,
+          child: _recordsView(
+            _salaryStructures,
+            emptyText: 'No salary structures found.',
+            emptyIcon: Icons.payments_outlined,
+          ),
+        ),
+        _card(
+          title: 'Payroll Records (${_payrolls.length})',
+          icon: Icons.account_balance_wallet_outlined,
+          child: _recordsView(
+            _payrolls,
+            emptyText: 'No payroll records found.',
+            emptyIcon: Icons.account_balance_wallet_outlined,
+          ),
+        ),
+      ],
+    );
   }
 
   // ==========================================================
@@ -1389,11 +1761,12 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
       builder: (context, constraints) {
         final width = constraints.maxWidth;
 
-        if (width < 700) {
+        if (width < 640) {
           return _recordCards(records);
         }
 
-        final maxColumns = width >= 1100 ? 7 : (width >= 900 ? 6 : 5);
+        // As many columns as fit (at least 150 px each).
+        final maxColumns = math.min(7, math.max(3, (width / 150).floor()));
 
         return _recordTable(records, _pickColumns(records, maxColumns));
       },
@@ -1410,104 +1783,92 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: _border),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          // ------------------------------------------------
-          // HEADER ROW
-          // ------------------------------------------------
-
+          // header row
           Container(
             color: const Color(0xFFFAFBFC),
             padding: const EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: 13,
+              vertical: 12,
             ),
             child: Row(
-              children: columns.map((key) {
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: Text(
-                      _labelFor(key).toUpperCase(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                        color: Color(0xFF7B8493),
+              children: [
+                for (final key in columns)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Text(
+                        _labelFor(key).toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.4,
+                          color: Color(0xFF7B8493),
+                        ),
                       ),
                     ),
                   ),
-                );
-              }).toList(),
+              ],
             ),
           ),
-
           const Divider(height: 1, color: _divider),
 
-          // ------------------------------------------------
-          // DATA ROWS
-          // ------------------------------------------------
-
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
-            itemCount: records.length,
-            separatorBuilder: (_, __) => const Divider(
-              height: 1,
-              color: _divider,
-            ),
-            itemBuilder: (context, index) {
-              final record = records[index];
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: columns.map((key) {
-                    final text = _formatCell(key, record[key]);
-
-                    final isStatus = key.toLowerCase().endsWith('status');
-
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: isStatus && text != '—'
-                            ? Align(
-                          alignment: Alignment.centerLeft,
-                          child: _Badge(text: text),
-                        )
-                            : Text(
-                          text,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: columns.first == key
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            color: columns.first == key
-                                ? _textDark
-                                : _textMedium,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              );
-            },
-          ),
+          // data rows
+          for (var i = 0; i < records.length; i++) ...[
+            if (i > 0) const Divider(height: 1, color: _divider),
+            _recordRow(records[i], columns),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _recordRow(Map<String, dynamic> record, List<String> columns) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 13,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          for (final key in columns)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: _recordCell(key, record[key], columns.first == key),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _recordCell(String key, dynamic value, bool isFirst) {
+    final text = _formatCell(key, value);
+    final isStatus = key.toLowerCase().endsWith('status');
+
+    if (isStatus && text != '—') {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: _Badge(text: text),
+      );
+    }
+
+    return Text(
+      text,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: 13.5,
+        fontWeight: isFirst ? FontWeight.w700 : FontWeight.w500,
+        color: isFirst ? _textDark : _textMedium,
       ),
     );
   }
@@ -1517,110 +1878,117 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
   Widget _recordCards(List<Map<String, dynamic>> records) {
     final columns = _pickColumns(records, 8);
 
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.zero,
-      itemCount: records.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final record = records[index];
-
-        final titleKey = columns.isNotEmpty ? columns.first : null;
-
-        final statusKey = columns.firstWhere(
-              (key) => key.toLowerCase().endsWith('status'),
-          orElse: () => '',
-        );
-
-        final detailKeys = columns
-            .where((key) => key != titleKey && key != statusKey)
-            .where((key) => record[key] != null)
-            .toList();
-
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _border),
+    return Column(
+      children: [
+        for (var i = 0; i < records.length; i++)
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: i == records.length - 1 ? 0 : 10,
+            ),
+            child: _recordCard(records[i], columns, i),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      ],
+    );
+  }
+
+  Widget _recordCard(
+      Map<String, dynamic> record,
+      List<String> columns,
+      int index,
+      ) {
+    final titleKey = columns.isNotEmpty ? columns.first : null;
+
+    final statusKey = columns.firstWhere(
+          (key) => key.toLowerCase().endsWith('status'),
+      orElse: () => '',
+    );
+
+    final detailKeys = columns
+        .where((key) => key != titleKey && key != statusKey)
+        .where((key) => record[key] != null)
+        .toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      titleKey == null
-                          ? 'Record ${index + 1}'
-                          : _formatCell(titleKey, record[titleKey]),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w700,
-                        color: _textDark,
-                      ),
-                    ),
+              Expanded(
+                child: Text(
+                  titleKey == null
+                      ? 'Record ${index + 1}'
+                      : _formatCell(titleKey, record[titleKey]),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: _textDark,
                   ),
-                  if (statusKey.isNotEmpty && record[statusKey] != null) ...[
-                    const SizedBox(width: 8),
-                    _Badge(text: _formatCell(statusKey, record[statusKey])),
-                  ],
-                ],
+                ),
               ),
-              if (detailKeys.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                const Divider(height: 1, color: _divider),
-                const SizedBox(height: 10),
-                ...detailKeys.map((key) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 4,
-                          child: Text(
-                            _labelFor(key),
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              color: _textLight,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 6,
-                          child: Text(
-                            _formatCell(key, record[key]),
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                              color: _textDark,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+              if (statusKey.isNotEmpty && record[statusKey] != null) ...[
+                const SizedBox(width: 8),
+                _Badge(text: _formatCell(statusKey, record[statusKey])),
               ],
             ],
           ),
-        );
-      },
+          if (detailKeys.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Divider(height: 1, color: _divider),
+            const SizedBox(height: 10),
+            for (final key in detailKeys)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: Text(
+                        _labelFor(key),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: _textLight,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 6,
+                      child: Text(
+                        _formatCell(key, record[key]),
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: _textDark,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
     );
   }
 
   Widget _emptyBox(String text, IconData icon) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 36),
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
       decoration: BoxDecoration(
         color: _pageBackground,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: _divider),
       ),
       child: Column(
@@ -1638,6 +2006,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
           const SizedBox(height: 12),
           Text(
             text,
+            textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 14.5,
               fontWeight: FontWeight.w600,
@@ -1650,136 +2019,105 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
   }
 
   // ==========================================================
-  // FORM-STYLE BUILDING BLOCKS
+  // BUILDING BLOCKS
   // ==========================================================
 
-  /// Read-only field: label above, value in a light bordered box.
-  Widget _field(String label, String value, IconData icon) {
-    final empty = value == 'Not available';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w600,
-            color: _textDark,
+  /// White section card with a titled header.
+  Widget _card({
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _divider),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
           ),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(minHeight: 48),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 13,
-          ),
-          decoration: BoxDecoration(
-            color: _pageBackground,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: _border),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 1),
-                child: Icon(icon, size: 17, color: _textLight),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SelectableText(
-                  value,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: empty ? _textLight : _textDark,
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: _primaryLight,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(icon, size: 17, color: _primary),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: _textDark,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+          const Divider(height: 1, color: _divider),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: child,
+          ),
+        ],
+      ),
     );
   }
 
-  /// Responsive grid: 4 / 3 / 2 / 1 columns depending on width.
-  Widget _grid(List<Widget> items) {
+  /// Read-only value tile.
+  Widget _field(String label, String value, IconData icon) {
+    return _FieldTile(label: label, value: value, icon: icon);
+  }
+
+  /// Responsive grid: as many columns as fit (up to [maxColumns]).
+  Widget _grid(
+      List<Widget> items, {
+        int maxColumns = 3,
+        double minItemWidth = 260,
+      }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
 
-        int columns;
-        if (width >= 1300) {
-          columns = 4;
-        } else if (width >= 900) {
-          columns = 3;
-        } else if (width >= 560) {
-          columns = 2;
-        } else {
-          columns = 1;
-        }
+        final columns = math.min(
+          maxColumns,
+          math.max(1, (width / minItemWidth).floor()),
+        );
 
-        const double gap = 20;
+        const gap = 14.0;
 
         final itemWidth = (width - gap * (columns - 1)) / columns;
 
         return Wrap(
           spacing: gap,
-          runSpacing: 16,
-          children: items.map((item) {
-            return SizedBox(
-              width: itemWidth,
-              child: item,
-            );
-          }).toList(),
+          runSpacing: gap,
+          children: [
+            for (final item in items) SizedBox(width: itemWidth, child: item),
+          ],
         );
       },
-    );
-  }
-
-  Widget _section({
-    required String title,
-    required Widget child,
-    bool last = false,
-  }) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: last ? 0 : 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 3,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: _primary,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16.5,
-                    fontWeight: FontWeight.w700,
-                    color: _textDark,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Divider(height: 1, color: _divider),
-          const SizedBox(height: 16),
-          child,
-        ],
-      ),
     );
   }
 
@@ -1789,84 +2127,199 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen>
 
   Widget _buildErrorState() {
     return Center(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 500),
-        margin: const EdgeInsets.all(24),
-        padding: const EdgeInsets.all(30),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _border),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 62,
-              height: 62,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF1F1),
-                borderRadius: BorderRadius.circular(16),
+      child: SingleChildScrollView(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 500),
+          margin: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(30),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _border),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 62,
+                height: 62,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF1F1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.error_outline_rounded,
+                  size: 32,
+                  color: Color(0xFFDC2626),
+                ),
               ),
-              child: const Icon(
-                Icons.error_outline_rounded,
-                size: 32,
-                color: Color(0xFFDC2626),
+              const SizedBox(height: 16),
+              const Text(
+                'Unable to load employee details',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: _textDark,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Unable to load employee details',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
-                color: _textDark,
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage ?? 'Something went wrong.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: Colors.grey.shade600,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _errorMessage!,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13.5,
-                color: Colors.grey.shade600,
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: _loadEmployeeDetails,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _primary,
+                  foregroundColor: Colors.white,
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: _loadEmployeeDetails,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
-              style: FilledButton.styleFrom(
-                backgroundColor: _primary,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+}
 
-  // ==========================================================
-  // INITIALS
-  // ==========================================================
+// =================================================================
+// FIELD TILE (icon + label + value)
+// =================================================================
 
-  String _initials(String name) {
-    final clean = name.trim();
+class _FieldTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Widget? trailing;
 
-    if (clean.isEmpty || clean == 'Not available') {
-      return '?';
-    }
+  const _FieldTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.trailing,
+  });
 
-    final parts = clean.split(RegExp(r'\s+'));
+  @override
+  Widget build(BuildContext context) {
+    final empty = value == 'Not available';
 
-    if (parts.length == 1) {
-      return parts[0][0].toUpperCase();
-    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+      decoration: BoxDecoration(
+        color: _pageBackground,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _divider),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _primaryLight,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, size: 18, color: _primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: _textLight,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                SelectableText(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    color: empty ? _textLight : _textDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) trailing! else const SizedBox(width: 4),
+        ],
+      ),
+    );
+  }
+}
 
-    return (parts[0][0] + parts[1][0]).toUpperCase();
+// =================================================================
+// MASKED FIELD (account number with show / hide)
+// =================================================================
+
+class _MaskedFieldTile extends StatefulWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _MaskedFieldTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  State<_MaskedFieldTile> createState() => _MaskedFieldTileState();
+}
+
+class _MaskedFieldTileState extends State<_MaskedFieldTile> {
+  bool _visible = false;
+
+  bool get _canToggle =>
+      widget.value != 'Not available' && widget.value.length > 4;
+
+  String get _masked {
+    final v = widget.value;
+
+    if (!_canToggle) return v;
+
+    return '${'•' * (v.length - 4)}${v.substring(v.length - 4)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FieldTile(
+      label: widget.label,
+      value: _visible ? widget.value : _masked,
+      icon: widget.icon,
+      trailing: _canToggle
+          ? IconButton(
+        visualDensity: VisualDensity.compact,
+        tooltip: _visible ? 'Hide' : 'Show',
+        onPressed: () => setState(() => _visible = !_visible),
+        icon: Icon(
+          _visible
+              ? Icons.visibility_off_outlined
+              : Icons.visibility_outlined,
+          size: 19,
+          color: _textLight,
+        ),
+      )
+          : null,
+    );
   }
 }
 

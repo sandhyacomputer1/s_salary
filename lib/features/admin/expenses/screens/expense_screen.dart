@@ -504,27 +504,27 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Expense Management',
-                style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: textDark),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                widget.canManage
-                    ? 'Review and manage employee expense claims.'
-                    : 'View employee expense claims.',
-                style: const TextStyle(fontSize: 13, color: textMedium),
-              ),
-            ],
-          ),
-        ),
+        // Expanded(
+        //   child: Column(
+        //     crossAxisAlignment: CrossAxisAlignment.start,
+        //     children: [
+        //       const Text(
+        //         'Expense Management',
+        //         style: TextStyle(
+        //             fontSize: 22,
+        //             fontWeight: FontWeight.w800,
+        //             color: textDark),
+        //       ),
+        //       const SizedBox(height: 5),
+        //       Text(
+        //         widget.canManage
+        //             ? 'Review and manage employee expense claims.'
+        //             : 'View employee expense claims.',
+        //         style: const TextStyle(fontSize: 13, color: textMedium),
+        //       ),
+        //     ],
+        //   ),
+        // ),
         // PERMISSION: tells a view-only role why there are no buttons
         if (!widget.canManage)
           Container(

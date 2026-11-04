@@ -398,22 +398,22 @@ class _SettingsScreenState extends State<SettingsScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Company Settings',
-          style: TextStyle(
-            fontSize: mobile ? 22 : 27,
-            fontWeight: FontWeight.w700,
-            color: _textDark,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Manage your company profile, work timings and policies.',
-          style: TextStyle(
-            fontSize: mobile ? 13 : 14,
-            color: Colors.grey.shade600,
-          ),
-        ),
+        // Text(
+        //   'Company Settings',
+        //   style: TextStyle(
+        //     fontSize: mobile ? 22 : 27,
+        //     fontWeight: FontWeight.w700,
+        //     color: _textDark,
+        //   ),
+        // ),
+        // const SizedBox(height: 6),
+        // Text(
+        //   'Manage your company profile, work timings and policies.',
+        //   style: TextStyle(
+        //     fontSize: mobile ? 13 : 14,
+        //     color: Colors.grey.shade600,
+        //   ),
+        // ),
       ],
     );
   }

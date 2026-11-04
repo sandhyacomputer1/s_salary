@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../data/models/employee.dart';
 import '../../../../data/services/employee_service.dart';
+import '../../employees/models/admin_employee_access.dart';
 import '../../employees/screens/employee_details_screen.dart';
 
 import '../models/department_model.dart';
@@ -21,10 +22,15 @@ class DepartmentScreen extends StatefulWidget {
   /// The default is true (the old behaviour).
   final bool canManage;
 
+  /// PERMISSION: what this role may see / do in the employee details page
+  /// that opens from "View" in the staff list.
+  final AdminEmployeeAccess employeeAccess;
+
   const DepartmentScreen({
     super.key,
     this.embedded = false,
     this.canManage = true,
+    this.employeeAccess = AdminEmployeeAccess.full,
   });
 
   @override
@@ -77,6 +83,10 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
 
   /// Department IDs whose staff list is currently visible.
   final Set<String> _expandedDepartmentIds = {};
+
+  /// Employee whose details page is open INSIDE this screen
+  /// (so the dashboard sidebar stays visible).
+  Employee? _detailsEmployee;
 
   final TextEditingController _searchController =
   TextEditingController();
@@ -648,12 +658,23 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
   Future<void> _viewEmployee(
       Employee employee,
       ) async {
+    // Inside the dashboard: open the details INSIDE this screen,
+    // so the sidebar and top bar stay visible.
+    if (widget.embedded) {
+      setState(() {
+        _detailsEmployee = employee;
+      });
+      return;
+    }
+
+    // Standalone: full screen page.
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) =>
             EmployeeDetailsScreen(
               employee: employee,
+              access: widget.employeeAccess, // PERMISSION
             ),
       ),
     );
@@ -662,6 +683,25 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
     // may have changed inside details.
     await _reloadEmployees();
     await _reloadDepartments();
+  }
+
+  /// Closes the details page (back to the department list) and refreshes,
+  /// because the employee may have been edited / archived there.
+  Future<void> _closeDetails() async {
+    if (!mounted) return;
+
+    setState(() {
+      _detailsEmployee = null;
+    });
+
+    try {
+      await Future.wait([
+        _reloadDepartments(),
+        _reloadEmployees(),
+      ]);
+    } catch (e) {
+      debugPrint('RELOAD AFTER DETAILS ERROR: $e');
+    }
   }
 
   // ==========================================================================
@@ -700,6 +740,27 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
   @override
   Widget build(BuildContext context) {
     final mobile = _isMobile;
+
+    // Inside the dashboard: an employee's details page replaces the list
+    // (the sidebar stays). The phone / browser back button returns to the
+    // list instead of leaving the dashboard.
+    final details = _detailsEmployee;
+    if (widget.embedded && details != null) {
+      return PopScope(
+        canPop: false,
+        onPopInvoked: (didPop) {
+          if (!didPop) _closeDetails();
+        },
+        child: EmployeeDetailsScreen(
+          key: ValueKey(details.id),
+          employee: details,
+          access: widget.employeeAccess, // PERMISSION
+          embedded: true,
+          backLabel: 'All Departments',
+          onBack: _closeDetails,
+        ),
+      );
+    }
 
     // Embedded: Return only the body so the dashboard shell stays visible
     if (widget.embedded) {

@@ -808,10 +808,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       return ShiftRosterScreen(embedded: true, canManage: _canManageShifts);
     }
     if (_selectedScreenIndex == 5) return const FieldTrackingScreen(embedded: true);
+
+
     if (_selectedScreenIndex == 6) {
-      // PERMISSION: view only unless this role may manage departments
-      return DepartmentScreen(embedded: true, canManage: _canManageDepartments);
-    }    if (_selectedScreenIndex == 7) {
+      // PERMISSION: view only unless this role may manage departments;
+      // the employee details page follows the same employee rules
+      return DepartmentScreen(
+        embedded: true,
+        canManage: _canManageDepartments,
+        employeeAccess: _employeeAccess,
+      );
+    }
+
+    if (_selectedScreenIndex == 7) {
       // PERMISSION: view only unless this role may manage expenses
       return ExpenseScreen(embedded: true, canManage: _canManageExpenses);
     }
