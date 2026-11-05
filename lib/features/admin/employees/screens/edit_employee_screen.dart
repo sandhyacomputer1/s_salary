@@ -1,14 +1,50 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../data/models/employee.dart';
 import '../../../../data/services/employee_service.dart';
 
+// ============================================================
+// STYLE
+// ============================================================
+
+const double _mobileBreakpoint = 700;
+const double _maxContentWidth = 1000;
+
+const Color _primary = Color(0xFFE96832);
+const Color _primaryLight = Color(0xFFFFF1EB);
+const Color _textDark = Color(0xFF18212F);
+const Color _textMedium = Color(0xFF4B5563);
+const Color _textLight = Color(0xFF8A93A1);
+const Color _border = Color(0xFFD9DEE5);
+const Color _divider = Color(0xFFE9ECF0);
+const Color _pageBackground = Color(0xFFF7F8FA);
+const Color _errorColor = Color(0xFFD32F2F);
+
+/// Edit employee form.
+///
+/// Two ways to show it:
+///  - `embedded: true`  -> inside the admin dashboard (the sidebar stays
+///    visible). No Scaffold of its own. [onClose] is called with `true`
+///    after a successful save and with `false` on cancel / back.
+///  - `embedded: false` -> full screen with its own Scaffold (the old way,
+///    opened with Navigator.push; pops with `true` after saving).
 class EditEmployeeScreen extends StatefulWidget {
   final Employee employee;
   final Map<String, dynamic> employeeData;
   final Map<String, dynamic> userData;
   final Map<String, dynamic> personalDetails;
+
+  /// true = shown inside the dashboard (sidebar stays visible).
+  final bool embedded;
+
+  /// Embedded only: called with true (saved) or false (cancelled).
+  final ValueChanged<bool>? onClose;
+
+  /// Embedded only: text of the back button.
+  final String backLabel;
 
   const EditEmployeeScreen({
     super.key,
@@ -16,6 +52,9 @@ class EditEmployeeScreen extends StatefulWidget {
     required this.employeeData,
     required this.userData,
     required this.personalDetails,
+    this.embedded = false,
+    this.onClose,
+    this.backLabel = 'Back',
   });
 
   @override
@@ -24,24 +63,11 @@ class EditEmployeeScreen extends StatefulWidget {
 
 class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   final _formKey = GlobalKey<FormState>();
+  final ScrollController _scrollController = ScrollController();
 
   final EmployeeService _employeeService = EmployeeService();
 
   final ApiClient _apiClient = ApiClient();
-
-  // ============================================================
-  // COLORS
-  // ============================================================
-
-  static const Color primary = Color(0xFFE96832);
-  static const Color primaryLight = Color(0xFFFFF1EB);
-  static const Color textDark = Color(0xFF18212F);
-  static const Color textMedium = Color(0xFF4B5563);
-  static const Color textLight = Color(0xFF8A93A1);
-  static const Color border = Color(0xFFD9DEE5);
-  static const Color divider = Color(0xFFE9ECF0);
-  static const Color pageBackground = Color(0xFFF7F8FA);
-  static const Color errorColor = Color(0xFFD32F2F);
 
   // ============================================================
   // CONTROLLERS
@@ -326,6 +352,8 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
+
     _nameController.dispose();
     _emailController.dispose();
     _employeeCodeController.dispose();
@@ -346,6 +374,18 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   }
 
   // ============================================================
+  // CLOSE (back / cancel / after save)
+  // ============================================================
+
+  void _close(bool saved) {
+    if (widget.embedded) {
+      widget.onClose?.call(saved);
+    } else {
+      Navigator.pop(context, saved ? true : null);
+    }
+  }
+
+  // ============================================================
   // DATE PICKER
   // ============================================================
 
@@ -363,7 +403,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: primary,
+              primary: _primary,
             ),
           ),
           child: child!,
@@ -402,12 +442,31 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
         '${date.year}';
   }
 
+  String _initials(String name) {
+    final clean = name.trim();
+
+    if (clean.isEmpty) return '?';
+
+    final parts = clean.split(RegExp(r'\s+'));
+
+    if (parts.length == 1) {
+      return parts[0][0].toUpperCase();
+    }
+
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
   // ============================================================
   // SAVE
   // ============================================================
 
   Future<void> _saveChanges() async {
+    if (_isSaving) return;
+
+    FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate()) {
+      _showMessage('Please fix the highlighted fields.');
       return;
     }
 
@@ -435,11 +494,6 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
       // 1. JOB / EMPLOYMENT / BANK / STATUS FIELDS
       //
       // PUT /employees/:id
-      //
-      // This is the endpoint that was previously never called,
-      // so department, designation, employment type, work mode,
-      // date of joining, bank details and status changes were
-      // silently discarded.
       // ========================================================
 
       await _employeeService.updateEmployee(
@@ -474,11 +528,6 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
       // 2. PERSONAL / CONTACT FIELDS
       //
       // PUT /employees/:id/personal-details
-      //
-      // Supported fields:
-      // phone
-      // address
-      // emergencyContact
       // ========================================================
 
       await _employeeService.updatePersonalDetails(
@@ -506,7 +555,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
         ),
       );
 
-      Navigator.pop(context, true);
+      _close(true);
     } catch (e) {
       if (!mounted) {
         return;
@@ -545,7 +594,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
 
   OutlineInputBorder _outline(Color color, [double width = 1]) {
     return OutlineInputBorder(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
       borderSide: BorderSide(color: color, width: width),
     );
   }
@@ -560,7 +609,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
       hintText: hint,
       hintStyle: const TextStyle(
         fontSize: 14.5,
-        color: textLight,
+        color: _textLight,
       ),
       errorStyle: const TextStyle(
         fontSize: 12,
@@ -571,7 +620,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
           : Icon(
         icon,
         size: 19,
-        color: textLight,
+        color: _textLight,
       ),
       prefixIconConstraints: const BoxConstraints(
         minWidth: 44,
@@ -586,13 +635,13 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
       fillColor: Colors.white,
       contentPadding: EdgeInsets.symmetric(
         horizontal: icon == null ? 14 : 4,
-        vertical: 16,
+        vertical: 15,
       ),
-      border: _outline(border),
-      enabledBorder: _outline(border),
-      focusedBorder: _outline(primary, 1.5),
-      errorBorder: _outline(errorColor),
-      focusedErrorBorder: _outline(errorColor, 1.5),
+      border: _outline(_border),
+      enabledBorder: _outline(_border),
+      focusedBorder: _outline(_primary, 1.5),
+      errorBorder: _outline(_errorColor),
+      focusedErrorBorder: _outline(_errorColor, 1.5),
     );
   }
 
@@ -614,13 +663,13 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
             style: const TextStyle(
               fontSize: 13.5,
               fontWeight: FontWeight.w600,
-              color: textDark,
+              color: _textDark,
             ),
             children: [
               if (required)
                 const TextSpan(
                   text: ' *',
-                  style: TextStyle(color: errorColor),
+                  style: TextStyle(color: _errorColor),
                 ),
             ],
           ),
@@ -640,20 +689,26 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
     required TextEditingController controller,
     required IconData icon,
     TextInputType? keyboardType,
-    bool readOnly = false,
+    TextCapitalization textCapitalization = TextCapitalization.none,
     int maxLines = 1,
+    bool last = false,
   }) {
+    final multiline = maxLines > 1;
+
     return _labeled(
       label: label,
       required: true,
       child: TextFormField(
         controller: controller,
-        keyboardType: keyboardType,
-        readOnly: readOnly,
+        keyboardType: multiline ? TextInputType.multiline : keyboardType,
+        textCapitalization: textCapitalization,
+        textInputAction: multiline
+            ? TextInputAction.newline
+            : (last ? TextInputAction.done : TextInputAction.next),
         maxLines: maxLines,
         style: const TextStyle(
           fontSize: 15.5,
-          color: textDark,
+          color: _textDark,
         ),
         decoration: _inputDecoration(
           hint: label,
@@ -681,13 +736,8 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
     required ValueChanged<String?> onChanged,
     required IconData icon,
   }) {
-    // ----------------------------------------------------------
     // Protection against:
-    //
-    // "There should be exactly one item with DropdownButton's
-    // value..."
-    // ----------------------------------------------------------
-
+    // "There should be exactly one item with DropdownButton's value..."
     final safeValue = items.contains(value) ? value : null;
 
     return _labeled(
@@ -699,17 +749,17 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
         icon: const Icon(
           Icons.keyboard_arrow_down_rounded,
           size: 22,
-          color: textMedium,
+          color: _textMedium,
         ),
         style: const TextStyle(
           fontSize: 15.5,
-          color: textDark,
+          color: _textDark,
         ),
         hint: const Text(
           'Select',
           style: TextStyle(
             fontSize: 14.5,
-            color: textLight,
+            color: _textLight,
           ),
         ),
         decoration: _inputDecoration(
@@ -766,7 +816,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
       label: label,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         child: InputDecorator(
           decoration: _inputDecoration(
             hint: 'Select date',
@@ -774,14 +824,14 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
             suffixIcon: const Icon(
               Icons.calendar_today_outlined,
               size: 17,
-              color: textMedium,
+              color: _textMedium,
             ),
           ),
           child: Text(
             _dateText(value),
             style: TextStyle(
               fontSize: 15.5,
-              color: value == null ? textLight : textDark,
+              color: value == null ? _textLight : _textDark,
             ),
           ),
         ),
@@ -809,7 +859,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
               width: 16,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: primary,
+                color: _primary,
               ),
             ),
             SizedBox(width: 12),
@@ -819,7 +869,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 14.5,
-                  color: textLight,
+                  color: _textLight,
                 ),
               ),
             ),
@@ -833,78 +883,89 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   // LAYOUT HELPERS
   // ============================================================
 
-  /// Responsive grid: 4 / 3 / 2 / 1 columns depending on width.
+  /// Responsive grid: as many columns as fit (up to 3), based on the real
+  /// width of the form (so the sidebar is taken into account).
   Widget _grid(List<Widget> items) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
 
-        int columns;
-        if (width >= 1300) {
-          columns = 4;
-        } else if (width >= 900) {
-          columns = 3;
-        } else if (width >= 560) {
-          columns = 2;
-        } else {
-          columns = 1;
-        }
+        final columns = math.min(3, math.max(1, (width / 280).floor()));
 
-        const double gap = 20;
+        const gap = 18.0;
 
         final itemWidth = (width - gap * (columns - 1)) / columns;
 
         return Wrap(
           spacing: gap,
           runSpacing: 18,
-          children: items.map((item) {
-            return SizedBox(
-              width: itemWidth,
-              child: item,
-            );
-          }).toList(),
+          children: [
+            for (final item in items) SizedBox(width: itemWidth, child: item),
+          ],
         );
       },
     );
   }
 
-  Widget _section({
+  /// White section card with a titled header.
+  Widget _card({
     required String title,
+    required IconData icon,
     required Widget child,
-    bool last = false,
   }) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: last ? 0 : 28),
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _divider),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 3,
-                height: 17,
-                decoration: BoxDecoration(
-                  color: primary,
-                  borderRadius: BorderRadius.circular(2),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: _primaryLight,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(icon, size: 17, color: _primary),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16.5,
-                    fontWeight: FontWeight.w700,
-                    color: textDark,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: _textDark,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          const Divider(height: 1, color: divider),
-          const SizedBox(height: 16),
-          child,
+          const Divider(height: 1, color: _divider),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: child,
+          ),
         ],
       ),
     );
@@ -916,50 +977,54 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mobile = MediaQuery.of(context).size.width < 700;
+    final media = MediaQuery.of(context);
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildPageHeader(mobile),
-            Expanded(
-              child: Form(
-                key: _formKey,
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(
-                    mobile ? 14 : 24,
-                    22,
-                    mobile ? 14 : 24,
-                    30,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildBasicSection(),
-                      _buildEmploymentSection(),
-                      _buildPersonalSection(),
-                      _buildEmergencySection(),
-                      _buildBankSection(),
-                      _buildStatusSection(),
-                      _buildActionButtons(),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
+    // Large accessibility fonts must not break the layout on any platform.
+    return MediaQuery(
+      data: media.copyWith(
+        textScaler: media.textScaler.clamp(
+          minScaleFactor: 1.0,
+          maxScaleFactor: 1.2,
         ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Phone / wide layout follows the space THIS page really has
+          // (inside the dashboard the sidebar takes part of the width).
+          final mobile = constraints.maxWidth < _mobileBreakpoint;
+
+          final content = Column(
+            children: [
+              _buildTopBar(mobile),
+              Expanded(child: _buildForm(mobile, constraints.maxWidth)),
+              _buildBottomBar(mobile),
+            ],
+          );
+
+          // Inside the dashboard: no Scaffold, the sidebar stays visible.
+          if (widget.embedded) {
+            return ColoredBox(color: _pageBackground, child: content);
+          }
+
+          return PopScope(
+            canPop: !_isSaving,
+            child: Scaffold(
+              backgroundColor: _pageBackground,
+              body: SafeArea(child: content),
+            ),
+          );
+        },
       ),
     );
   }
 
   // ============================================================
-  // PAGE HEADER
+  // TOP BAR
   // ============================================================
 
-  Widget _buildPageHeader(bool mobile) {
+  Widget _buildTopBar(bool mobile) {
+    final embedded = widget.embedded;
+
     final subtitle = [
       if (widget.employee.name.trim().isNotEmpty) widget.employee.name,
       if (widget.employee.employeeCode.trim().isNotEmpty)
@@ -968,45 +1033,86 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
 
     return Container(
       width: double.infinity,
-      height: 62,
+      height: embedded ? 58 : 62,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
-          bottom: BorderSide(color: border),
+          bottom: BorderSide(color: _border),
         ),
       ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: mobile ? 6 : 16),
-        child: Row(
-          children: [
+      padding: EdgeInsets.symmetric(
+        horizontal: mobile ? 4 : (embedded ? 20 : 16),
+      ),
+      child: Row(
+        children: [
+          if (embedded) ...[
+            // Inside the dashboard: "← Employee Details"
+            Flexible(
+              child: TextButton.icon(
+                onPressed: _isSaving ? null : () => _close(false),
+                icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                label: Text(
+                  widget.backLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: _textMedium,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              width: 1,
+              height: 20,
+              margin: const EdgeInsets.symmetric(horizontal: 10),
+              color: _divider,
+            ),
+            const Text(
+              'Edit Employee',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: _textDark,
+              ),
+            ),
+            const Spacer(),
+          ] else ...[
             IconButton(
               tooltip: 'Back',
-              onPressed: _isSaving
-                  ? null
-                  : () {
-                Navigator.pop(context);
-              },
+              onPressed: _isSaving ? null : () => _close(false),
               icon: const Icon(
                 Icons.arrow_back_rounded,
-                size: 21,
-                color: textDark,
+                size: 22,
+                color: _textDark,
               ),
             ),
-            const SizedBox(width: 2),
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: primaryLight,
-                borderRadius: BorderRadius.circular(10),
+            if (!mobile) ...[
+              const SizedBox(width: 2),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _primaryLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.edit_outlined,
+                  color: _primary,
+                  size: 19,
+                ),
               ),
-              child: const Icon(
-                Icons.edit_outlined,
-                color: primary,
-                size: 19,
-              ),
-            ),
-            const SizedBox(width: 12),
+              const SizedBox(width: 12),
+            ],
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1019,57 +1125,137 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: textDark,
+                      color: _textDark,
                     ),
                   ),
-                  const SizedBox(height: 1),
-                  Text(
-                    subtitle.isEmpty
-                        ? 'Update employee profile and contact details.'
-                        : subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: textLight,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (!mobile)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: pageBackground,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: border),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.admin_panel_settings_outlined,
-                      size: 16,
-                      color: textMedium,
-                    ),
-                    SizedBox(width: 6),
+                  if (!mobile) ...[
+                    const SizedBox(height: 1),
                     Text(
-                      'Admin',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: textMedium,
+                      subtitle.isEmpty
+                          ? 'Update employee profile and contact details.'
+                          : subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: _textLight,
                       ),
                     ),
                   ],
-                ),
+                ],
               ),
+            ),
           ],
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // FORM
+  // ============================================================
+
+  Widget _buildForm(bool mobile, double width) {
+    final basePad = mobile ? 14.0 : 24.0;
+
+    // Inside the dashboard the form uses the full width next to the
+    // sidebar. Full screen on a very wide display: centered.
+    final side = widget.embedded
+        ? basePad
+        : math.max(basePad, (width - _maxContentWidth) / 2);
+
+    return Form(
+      key: _formKey,
+      child: Scrollbar(
+        controller: _scrollController,
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(side, mobile ? 14 : 22, side, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeroStrip(mobile),
+              SizedBox(height: mobile ? 14 : 18),
+              _buildBasicSection(),
+              _buildEmploymentSection(),
+              _buildPersonalSection(),
+              _buildEmergencySection(),
+              _buildBankSection(),
+              _buildStatusSection(),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeroStrip(bool mobile) {
+    final name = widget.employee.name.trim();
+    final code = widget.employee.employeeCode.trim();
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(mobile ? 14 : 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _divider),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: mobile ? 46 : 54,
+            height: mobile ? 46 : 54,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFFF7A1A), Color(0xFFE0501E)],
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              _initials(name),
+              style: TextStyle(
+                fontSize: mobile ? 17 : 20,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name.isEmpty ? 'Employee' : name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: mobile ? 16 : 18,
+                    fontWeight: FontWeight.w800,
+                    color: _textDark,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  code.isEmpty
+                      ? 'Fields marked * are required.'
+                      : '$code  •  Fields marked * are required.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: _textLight,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1079,13 +1265,15 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   // ============================================================
 
   Widget _buildBasicSection() {
-    return _section(
+    return _card(
       title: 'Basic Information',
+      icon: Icons.person_outline_rounded,
       child: _grid([
         _textField(
           label: 'Full Name',
           controller: _nameController,
           icon: Icons.person_outline,
+          textCapitalization: TextCapitalization.words,
         ),
         _textField(
           label: 'Email',
@@ -1097,6 +1285,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
           label: 'Employee Code',
           controller: _employeeCodeController,
           icon: Icons.badge_outlined,
+          textCapitalization: TextCapitalization.characters,
         ),
         _textField(
           label: 'Phone Number',
@@ -1113,19 +1302,18 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   // ============================================================
 
   Widget _buildEmploymentSection() {
-    return _section(
+    return _card(
       title: 'Employment Information',
+      icon: Icons.business_center_outlined,
       child: _grid([
         _textField(
           label: 'Designation',
           controller: _designationController,
           icon: Icons.workspace_premium_outlined,
+          textCapitalization: TextCapitalization.words,
         ),
 
-        // ------------------------------------------------------
         // DEPARTMENT FROM API
-        // ------------------------------------------------------
-
         if (_isLoadingDepartments)
           _loadingField('Department')
         else
@@ -1189,37 +1377,46 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   // ============================================================
 
   Widget _buildPersonalSection() {
-    return _section(
+    return _card(
       title: 'Personal Information',
-      child: _grid([
-        _dropdown(
-          label: 'Gender',
-          value: _gender,
-          items: const [
-            'male',
-            'female',
-            'other',
-          ],
-          onChanged: (value) {
-            setState(() {
-              _gender = value;
-            });
-          },
-          icon: Icons.person_outline,
-        ),
-        _dateField(
-          label: 'Date of Birth',
-          value: _dateOfBirth,
-          onTap: () => _selectDate(joiningDate: false),
-          icon: Icons.cake_outlined,
-        ),
-        _textField(
-          label: 'Address',
-          controller: _addressController,
-          icon: Icons.home_outlined,
-          maxLines: 2,
-        ),
-      ]),
+      icon: Icons.contact_page_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _grid([
+            _dropdown(
+              label: 'Gender',
+              value: _gender,
+              items: const [
+                'male',
+                'female',
+                'other',
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _gender = value;
+                });
+              },
+              icon: Icons.person_outline,
+            ),
+            _dateField(
+              label: 'Date of Birth',
+              value: _dateOfBirth,
+              onTap: () => _selectDate(joiningDate: false),
+              icon: Icons.cake_outlined,
+            ),
+          ]),
+          const SizedBox(height: 18),
+          // The address uses the full width.
+          _textField(
+            label: 'Address',
+            controller: _addressController,
+            icon: Icons.home_outlined,
+            maxLines: 3,
+            textCapitalization: TextCapitalization.sentences,
+          ),
+        ],
+      ),
     );
   }
 
@@ -1228,18 +1425,21 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   // ============================================================
 
   Widget _buildEmergencySection() {
-    return _section(
+    return _card(
       title: 'Emergency Contact',
+      icon: Icons.emergency_outlined,
       child: _grid([
         _textField(
           label: 'Emergency Contact Name',
           controller: _emergencyNameController,
           icon: Icons.person_outline,
+          textCapitalization: TextCapitalization.words,
         ),
         _textField(
           label: 'Relationship',
           controller: _emergencyRelationshipController,
           icon: Icons.family_restroom_outlined,
+          textCapitalization: TextCapitalization.words,
         ),
         _textField(
           label: 'Emergency Phone',
@@ -1256,8 +1456,9 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   // ============================================================
 
   Widget _buildBankSection() {
-    return _section(
+    return _card(
       title: 'Bank Details',
+      icon: Icons.account_balance_outlined,
       child: _grid([
         _textField(
           label: 'Account Number',
@@ -1269,16 +1470,20 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
           label: 'IFSC Code',
           controller: _ifscController,
           icon: Icons.numbers,
+          textCapitalization: TextCapitalization.characters,
         ),
         _textField(
           label: 'Bank Name',
           controller: _bankNameController,
           icon: Icons.account_balance_outlined,
+          textCapitalization: TextCapitalization.words,
         ),
         _textField(
           label: 'UPI ID',
           controller: _upiController,
           icon: Icons.payment_outlined,
+          keyboardType: TextInputType.emailAddress,
+          last: true,
         ),
       ]),
     );
@@ -1289,19 +1494,19 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   // ============================================================
 
   Widget _buildStatusSection() {
-    return _section(
+    return _card(
       title: 'Account Status',
-      last: true,
+      icon: Icons.toggle_on_outlined,
       child: Container(
         padding: const EdgeInsets.symmetric(
-          horizontal: 16,
+          horizontal: 14,
           vertical: 12,
         ),
         decoration: BoxDecoration(
-          color: _isActive ? const Color(0xFFF3FBF6) : pageBackground,
-          borderRadius: BorderRadius.circular(8),
+          color: _isActive ? const Color(0xFFF3FBF6) : _pageBackground,
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: _isActive ? const Color(0xFFBFE5CC) : border,
+            color: _isActive ? const Color(0xFFBFE5CC) : _border,
           ),
         ),
         child: Row(
@@ -1313,7 +1518,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
                 color: _isActive ? const Color(0xFFE9F8EF) : Colors.white,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: _isActive ? const Color(0xFFBFE5CC) : border,
+                  color: _isActive ? const Color(0xFFBFE5CC) : _border,
                 ),
               ),
               child: Icon(
@@ -1321,7 +1526,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
                     ? Icons.check_circle_outline_rounded
                     : Icons.pause_circle_outline_rounded,
                 size: 22,
-                color: _isActive ? const Color(0xFF18864B) : textMedium,
+                color: _isActive ? const Color(0xFF18864B) : _textMedium,
               ),
             ),
             const SizedBox(width: 14),
@@ -1334,7 +1539,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
                     style: const TextStyle(
                       fontSize: 15.5,
                       fontWeight: FontWeight.w700,
-                      color: textDark,
+                      color: _textDark,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -1344,7 +1549,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
                         : 'Employee account is inactive.',
                     style: const TextStyle(
                       fontSize: 13,
-                      color: textMedium,
+                      color: _textMedium,
                     ),
                   ),
                 ],
@@ -1352,7 +1557,13 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
             ),
             Switch(
               value: _isActive,
-              activeColor: primary,
+              thumbColor: WidgetStateProperty.all(Colors.white),
+              trackColor: WidgetStateProperty.resolveWith<Color>((states) {
+                return states.contains(WidgetState.selected)
+                    ? _primary
+                    : const Color(0xFFCBD2DC);
+              }),
+              trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
               onChanged: (value) {
                 setState(() {
                   _isActive = value;
@@ -1366,83 +1577,95 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   }
 
   // ============================================================
-  // ACTION BUTTONS (end of form)
+  // BOTTOM BAR (always visible: Cancel / Save)
   // ============================================================
 
-  Widget _buildActionButtons() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 28),
-      child: Column(
+  Widget _buildBottomBar(bool mobile) {
+    final cancel = OutlinedButton(
+      onPressed: _isSaving ? null : () => _close(false),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _textDark,
+        side: const BorderSide(color: _border),
+        padding: EdgeInsets.symmetric(
+          horizontal: mobile ? 12 : 28,
+          vertical: 16,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      child: const Text(
+        'Cancel',
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+
+    final save = FilledButton.icon(
+      onPressed: _isSaving ? null : _saveChanges,
+      icon: _isSaving
+          ? const SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: Colors.white,
+        ),
+      )
+          : const Icon(
+        Icons.save_outlined,
+        size: 19,
+      ),
+      label: Text(
+        _isSaving ? 'Saving...' : 'Save Changes',
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      style: FilledButton.styleFrom(
+        backgroundColor: _primary,
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: _primary.withValues(alpha: 0.6),
+        disabledForegroundColor: Colors.white,
+        padding: EdgeInsets.symmetric(
+          horizontal: mobile ? 12 : 28,
+          vertical: 16,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: _border),
+        ),
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: mobile ? 14 : 24,
+        vertical: 12,
+      ),
+      child: mobile
+          ? Row(
         children: [
-          const Divider(height: 1, color: divider),
-          const SizedBox(height: 18),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              OutlinedButton(
-                onPressed: _isSaving
-                    ? null
-                    : () {
-                  Navigator.pop(context);
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: textDark,
-                  side: const BorderSide(color: border),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 28,
-                    vertical: 17,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: _isSaving ? null : _saveChanges,
-                icon: _isSaving
-                    ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-                    : const Icon(
-                  Icons.save_outlined,
-                  size: 19,
-                ),
-                label: Text(
-                  _isSaving ? 'Saving...' : 'Save Changes',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: primary,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: primary.withOpacity(0.6),
-                  disabledForegroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 28,
-                    vertical: 17,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          Expanded(child: cancel),
+          const SizedBox(width: 10),
+          Expanded(flex: 2, child: save),
+        ],
+      )
+          : Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          cancel,
+          const SizedBox(width: 12),
+          save,
         ],
       ),
     );

@@ -358,6 +358,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
         employees: _active,
         companyId: _companyId,
         service: _ov,
+        onOpenProfile: widget.onOpenProfile, // NEW: three-dot menu -> View Profile
       ));
     }
 

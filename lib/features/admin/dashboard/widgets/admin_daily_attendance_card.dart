@@ -8,20 +8,30 @@ import '../../employees/widgets/admin_employee_theme.dart';
 import '../../employees/widgets/admin_profile_common.dart';
 import '../models/admin_overview_models.dart';
 import '../services/admin_overview_service.dart';
+import 'attendance_photo_thumb.dart';
+
+/// If the API returns relative photo paths (e.g. "/uploads/a.jpg"),
+/// put your server base URL here. Base64 data URIs and full links
+/// are used as they are.
+const String _photoBase = '';
 
 /// "Daily Check-In & Check-Out": every active employee with check-in time,
-/// check-out time, total hours and status for the chosen day.
+/// check-out time, photos, total hours and status for the chosen day.
 /// Changing the day reloads the list.
 class AdminDailyAttendanceCard extends StatefulWidget {
   final List<AdminEmployeeModel> employees;
   final String companyId;
   final AdminOverviewService service;
 
+  /// Phone: three-dot menu -> "View Profile".
+  final void Function(AdminEmployeeModel employee)? onOpenProfile;
+
   const AdminDailyAttendanceCard({
     super.key,
     required this.employees,
     required this.companyId,
     required this.service,
+    this.onOpenProfile,
   });
 
   @override
@@ -39,8 +49,6 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
   int _request = 0; // ignores answers of a previous day
 
   // ---- live counter ----
-  // _now ticks every second (only while today is shown); only the "Working"
-  // cells listen to it, so the rest of the card is not rebuilt.
   final ValueNotifier<DateTime> _now = ValueNotifier<DateTime>(DateTime.now());
   Timer? _ticker; // 1 second: moves the running time
   Timer? _poll; // 15 seconds: silent refresh -> notices the check-out
@@ -75,8 +83,6 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
       _now.value = DateTime.now();
     });
 
-    // When someone checks out, the record gets a check-out time. This quiet
-    // refresh sees it and the counter of that person stops by itself.
     _poll = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted && !_loading) _load(silent: true);
     });
@@ -102,6 +108,14 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
     const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${weekdays[_date.weekday - 1]}, ${_date.day} ${months[_date.month - 1]} ${_date.year}';
+  }
+
+  /// Photo source for the thumbnail. null = no photo.
+  String? _photoUrl(String? p) {
+    if (p == null || p.trim().isEmpty) return null;
+    final v = p.trim();
+    if (v.startsWith('data:') || v.startsWith('http://') || v.startsWith('https://')) return v;
+    return '$_photoBase$v';
   }
 
   // ------------------------------------------------------------
@@ -234,7 +248,6 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
             builder: (context, c) {
               final narrow = c.maxWidth < 760;
               return Padding(
-                // phone: same side padding (14) as the chips and the rows below
                 padding: EdgeInsets.fromLTRB(narrow ? 14 : 24, narrow ? 18 : 22, narrow ? 14 : 24, 6),
                 child: _header(narrow),
               );
@@ -341,7 +354,7 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
       ],
     );
 
-    // ---------- phone: title, then  ‹  [ Mon, 2 Nov 2026 ]  › ----------
+    // ---------- phone ----------
     if (narrow) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,7 +533,7 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
       return Wrap(spacing: 10, runSpacing: 10, children: chips);
     }
 
-    // phone: ONE row that scrolls sideways (instead of 3 lines of chips)
+    // phone: ONE row that scrolls sideways
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -553,12 +566,13 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           child: const Row(
             children: [
-              Expanded(flex: 30, child: Text('EMPLOYEE', style: h)),
-              Expanded(flex: 16, child: Text('DEPARTMENT', style: h)),
-              Expanded(flex: 14, child: Text('CHECK-IN', style: h)),
-              Expanded(flex: 14, child: Text('CHECK-OUT', style: h)),
-              Expanded(flex: 14, child: Text('TOTAL HOURS', style: h)),
-              Expanded(flex: 16, child: Text('STATUS', style: h)),
+              Expanded(flex: 27, child: Text('EMPLOYEE', style: h)),
+              Expanded(flex: 14, child: Text('DEPARTMENT', style: h)),
+              Expanded(flex: 12, child: Text('CHECK-IN', style: h)),
+              Expanded(flex: 12, child: Text('CHECK-OUT', style: h)),
+              Expanded(flex: 14, child: Text('PHOTOS', style: h)),
+              Expanded(flex: 12, child: Text('TOTAL HOURS', style: h)),
+              Expanded(flex: 15, child: Text('STATUS', style: h)),
             ],
           ),
         ),
@@ -566,6 +580,18 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
           _tableRow(rows[i]),
           if (i != rows.length - 1) const Divider(height: 1, color: AdminEmpColors.border),
         ],
+      ],
+    );
+  }
+
+  /// In + Out thumbnails side by side.
+  Widget _photos(AdminDailyAttendance? rec, {double size = 40}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AttendancePhotoThumb(url: _photoUrl(rec?.checkInPhoto), label: 'In', size: size),
+        const SizedBox(width: 8),
+        AttendancePhotoThumb(url: _photoUrl(rec?.checkOutPhoto), label: 'Out', size: size),
       ],
     );
   }
@@ -580,7 +606,7 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
       child: Row(
         children: [
           Expanded(
-            flex: 30,
+            flex: 27,
             child: Row(
               children: [
                 CircleAvatar(
@@ -613,12 +639,16 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
               ],
             ),
           ),
-          Expanded(flex: 16, child: Text(adminProfOrDash(e.department), style: cell)),
-          Expanded(flex: 14, child: Text(adminProfTime(r.record?.checkIn), style: cell.copyWith(fontWeight: FontWeight.w600))),
-          Expanded(flex: 14, child: Text(adminProfTime(r.record?.checkOut), style: cell.copyWith(fontWeight: FontWeight.w600))),
-          Expanded(flex: 14, child: _hoursCell(r)),
+          Expanded(flex: 14, child: Text(adminProfOrDash(e.department), style: cell)),
+          Expanded(flex: 12, child: Text(adminProfTime(r.record?.checkIn), style: cell.copyWith(fontWeight: FontWeight.w600))),
+          Expanded(flex: 12, child: Text(adminProfTime(r.record?.checkOut), style: cell.copyWith(fontWeight: FontWeight.w600))),
           Expanded(
-            flex: 16,
+            flex: 14,
+            child: Align(alignment: Alignment.centerLeft, child: _photos(r.record)),
+          ),
+          Expanded(flex: 12, child: _hoursCell(r)),
+          Expanded(
+            flex: 15,
             child: Align(alignment: Alignment.centerLeft, child: _statusPill(_statusKey(r.record))),
           ),
         ],
@@ -710,49 +740,111 @@ class _AdminDailyAttendanceCardState extends State<AdminDailyAttendanceCard> {
         border: Border.all(color: AdminEmpColors.border),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: AdminEmpColors.primarySoft,
-            child: Text(
-              e.initials,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AdminEmpColors.primary),
-            ),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  e.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AdminEmpColors.text),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  'In ${adminProfTime(rec?.checkIn)}  ·  Out ${adminProfTime(rec?.checkOut)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: AdminEmpColors.muted),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Row(
             children: [
-              _hoursCell(r),
-              const SizedBox(height: 5),
-              _statusPill(_statusKey(rec), small: true),
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: AdminEmpColors.primarySoft,
+                child: Text(
+                  e.initials,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AdminEmpColors.primary),
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      e.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AdminEmpColors.text),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'In ${adminProfTime(rec?.checkIn)}  ·  Out ${adminProfTime(rec?.checkOut)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: AdminEmpColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _hoursCell(r),
+                  const SizedBox(height: 5),
+                  _statusPill(_statusKey(rec), small: true),
+                ],
+              ),
+              const SizedBox(width: 2),
+              _menuButton(r),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  // ------------------------------------------------------------
+  // three-dot menu (phone)
+  // ------------------------------------------------------------
+
+  Widget _menuButton(_Row r) {
+    final e = r.employee;
+    final inPhoto = _photoUrl(r.record?.checkInPhoto);
+    final outPhoto = _photoUrl(r.record?.checkOutPhoto);
+
+    PopupMenuItem<String> item(String value, IconData icon, String label, {bool enabled = true}) {
+      final color = enabled ? AdminEmpColors.text : const Color(0xFFC9CED6);
+      return PopupMenuItem<String>(
+        value: value,
+        enabled: enabled,
+        height: 46,
+        child: Row(
+          children: [
+            Icon(icon, size: 19, color: color),
+            const SizedBox(width: 14),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color)),
+          ],
+        ),
+      );
+    }
+
+    return PopupMenuButton<String>(
+      padding: const EdgeInsets.all(6),
+      constraints: const BoxConstraints(),
+      icon: const Icon(Icons.more_vert, size: 20, color: AdminEmpColors.muted),
+      color: Colors.white,
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      offset: const Offset(0, 36),
+      onSelected: (v) {
+        switch (v) {
+          case 'in':
+            if (inPhoto != null) showAttendancePhoto(context, inPhoto, title: 'Check-In · ${e.name}');
+            break;
+          case 'out':
+            if (outPhoto != null) showAttendancePhoto(context, outPhoto, title: 'Check-Out · ${e.name}');
+            break;
+          case 'profile':
+            widget.onOpenProfile?.call(e);
+            break;
+        }
+      },
+      itemBuilder: (_) => [
+        item('profile', Icons.person_outline_rounded, 'View profile',
+            enabled: widget.onOpenProfile != null),
+        item('in', Icons.login_rounded, 'View check-in photo', enabled: inPhoto != null),
+        item('out', Icons.logout_rounded, 'View check-out photo', enabled: outPhoto != null),
+      ],
     );
   }
 

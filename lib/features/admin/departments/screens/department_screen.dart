@@ -742,23 +742,17 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
     final mobile = _isMobile;
 
     // Inside the dashboard: an employee's details page replaces the list
-    // (the sidebar stays). The phone / browser back button returns to the
-    // list instead of leaving the dashboard.
+    // (the sidebar stays). The details page handles the phone / browser
+    // back button itself (edit form -> details -> this list).
     final details = _detailsEmployee;
     if (widget.embedded && details != null) {
-      return PopScope(
-        canPop: false,
-        onPopInvoked: (didPop) {
-          if (!didPop) _closeDetails();
-        },
-        child: EmployeeDetailsScreen(
-          key: ValueKey(details.id),
-          employee: details,
-          access: widget.employeeAccess, // PERMISSION
-          embedded: true,
-          backLabel: 'All Departments',
-          onBack: _closeDetails,
-        ),
+      return EmployeeDetailsScreen(
+        key: ValueKey(details.id),
+        employee: details,
+        access: widget.employeeAccess, // PERMISSION
+        embedded: true,
+        backLabel: 'All Departments',
+        onBack: _closeDetails,
       );
     }
 

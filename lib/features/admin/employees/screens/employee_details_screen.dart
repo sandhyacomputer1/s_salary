@@ -40,8 +40,9 @@ enum _DetailTab {
 ///
 /// Two ways to show it:
 ///  - `embedded: true`  -> inside the admin dashboard (the sidebar stays
-///    visible). No Scaffold of its own; [onBack] is called by the
-///    "← back" button and after an employee is archived.
+///    visible). No Scaffold of its own. [onBack] is called by the
+///    "← back" button, by the phone / browser back button and after an
+///    employee is archived. Edit also opens INSIDE the dashboard.
 ///  - `embedded: false` -> full screen with its own Scaffold (the old way,
 ///    opened with Navigator.push).
 ///
@@ -60,7 +61,7 @@ class EmployeeDetailsScreen extends StatefulWidget {
   /// true = shown inside the dashboard (sidebar stays visible).
   final bool embedded;
 
-  /// Embedded only: called when the person taps back (or after archiving).
+  /// Embedded only: called when the person goes back (or after archiving).
   final VoidCallback? onBack;
 
   /// Embedded only: text of the back button, e.g. "All Departments".
@@ -97,6 +98,9 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
   bool _isLoading = true;
   bool _isDeleting = false;
   bool _hasData = false;
+
+  /// Embedded only: the edit form is open (inside the dashboard).
+  bool _editing = false;
 
   String? _errorMessage;
 
@@ -303,6 +307,13 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
   Future<void> _openEditScreen() async {
     if (!widget.access.canEdit) return; // PERMISSION
 
+    // Inside the dashboard: the form opens in the page area, the sidebar
+    // stays visible.
+    if (widget.embedded) {
+      setState(() => _editing = true);
+      return;
+    }
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -317,6 +328,17 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
 
     if (result == true) {
       await _loadEmployeeDetails(silent: true);
+    }
+  }
+
+  /// Embedded only: closes the edit form, and refreshes after a save.
+  void _closeEditor(bool saved) {
+    if (!mounted) return;
+
+    setState(() => _editing = false);
+
+    if (saved) {
+      _loadEmployeeDetails(silent: true);
     }
   }
 
@@ -505,6 +527,42 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Full screen (pushed route): the route handles back by itself.
+    if (!widget.embedded) return _buildPage();
+
+    // Inside the dashboard, the edit form replaces the page. Back (phone /
+    // browser) closes the form and returns to the details.
+    if (_editing) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop) _closeEditor(false);
+        },
+        child: EditEmployeeScreen(
+          key: const ValueKey('edit-employee'),
+          employee: widget.employee,
+          employeeData: _employeeData,
+          userData: _userData,
+          personalDetails: _personalDetails,
+          embedded: true,
+          backLabel: 'Employee Details',
+          onClose: _closeEditor,
+        ),
+      );
+    }
+
+    // Details inside the dashboard. Back (phone / browser) returns to the
+    // list the person came from instead of leaving the dashboard.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && !_isDeleting) _goBack();
+      },
+      child: _buildPage(),
+    );
+  }
+
+  Widget _buildPage() {
     final media = MediaQuery.of(context);
 
     // Large accessibility fonts must not break the layout on any platform.

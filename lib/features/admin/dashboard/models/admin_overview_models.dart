@@ -84,6 +84,16 @@ DateTime? _timeOf(dynamic v) {
   return _dt(v);
 }
 
+/// Photo inside checkIn / checkOut: { time, photoUrl, location, ... }.
+/// photoUrl is a base64 data URI ("data:image/jpeg;base64,...") or a link.
+String? _photoOf(dynamic v) {
+  if (v is Map) {
+    final s = _s(v['photoUrl']).trim();
+    if (s.isNotEmpty) return s;
+  }
+  return null;
+}
+
 /// One employee's attendance for a day
 /// (GET /attendance/company/:companyId/today?date=YYYY-MM-DD).
 class AdminDailyAttendance {
@@ -91,6 +101,8 @@ class AdminDailyAttendance {
   final String employeeName;
   final DateTime? checkIn;
   final DateTime? checkOut;
+  final String? checkInPhoto;
+  final String? checkOutPhoto;
   final String status;
   final bool isLate;
   final double? totalHours;
@@ -100,6 +112,8 @@ class AdminDailyAttendance {
     required this.employeeName,
     this.checkIn,
     this.checkOut,
+    this.checkInPhoto,
+    this.checkOutPhoto,
     this.status = '',
     this.isLate = false,
     this.totalHours,
@@ -116,6 +130,8 @@ class AdminDailyAttendance {
       employeeName: _refName(emp).isNotEmpty ? _refName(emp) : _s(j['name']),
       checkIn: _timeOf(att['checkIn']),
       checkOut: _timeOf(att['checkOut']),
+      checkInPhoto: _photoOf(att['checkIn']),
+      checkOutPhoto: _photoOf(att['checkOut']),
       status: _s(att['status']),
       isLate: att['isLate'] == true,
       totalHours: att['totalHours'] == null ? null : _d(att['totalHours']),

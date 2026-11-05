@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../../employees/widgets/admin_employee_theme.dart';
-import '../../employees/widgets/admin_profile_common.dart';
 
-/// One row of a pending list.
+// ---- tweak sizes here ----
+const double _btnHeight = 34;
+const double _approveWidth = 76;
+const double _rejectWidth = 66;
+const double _btnFont = 12.5;
+// --------------------------
+
 class AdminPendingRowData {
   final String title;
   final String subtitle;
-  final Future<void> Function() onApprove;
-  final Future<void> Function() onReject;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
 
   const AdminPendingRowData({
     required this.title,
@@ -18,7 +23,6 @@ class AdminPendingRowData {
   });
 }
 
-/// "Pending Leaves (0)" / "Pending Expenses (1)" card with Approve / Reject.
 class AdminOverviewPendingCard extends StatelessWidget {
   final String title;
   final int count;
@@ -37,16 +41,11 @@ class AdminOverviewPendingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.of(context).size.width < 600;
-
     return Container(
       width: double.infinity,
-      padding: compact
-          ? const EdgeInsets.fromLTRB(14, 14, 14, 8)
-          : const EdgeInsets.fromLTRB(24, 22, 24, 22),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(compact ? 12 : 14),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFEDEFF3)),
         boxShadow: const [
           BoxShadow(color: Color(0x0A000000), blurRadius: 12, offset: Offset(0, 3)),
@@ -55,108 +54,127 @@ class AdminOverviewPendingCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '$title ($count)',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: compact ? 16 : 18,
-                    fontWeight: FontWeight.w700,
-                    color: AdminEmpColors.text,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '$title ($count)',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AdminEmpColors.text,
+                    ),
                   ),
                 ),
-              ),
-              OutlinedButton(
-                onPressed: onViewAll,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: Size(0, compact ? 36 : 46),
-                  foregroundColor: AdminEmpColors.text,
-                  side: const BorderSide(color: AdminEmpColors.border),
-                  padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 20),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                OutlinedButton(
+                  onPressed: onViewAll,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: AdminEmpColors.text,
+                    side: const BorderSide(color: AdminEmpColors.border),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('View All',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                 ),
-                child: Text(
-                  'View All',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: compact ? 13 : 14),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-          SizedBox(height: compact ? 10 : 16),
           const Divider(height: 1, color: Color(0xFFEDEFF3)),
           if (rows.isEmpty)
             Padding(
-              padding: EdgeInsets.symmetric(vertical: compact ? 28 : 44),
+              padding: const EdgeInsets.symmetric(vertical: 28),
               child: Center(
-                child: Text(
-                  emptyText,
-                  style: TextStyle(fontSize: compact ? 14 : 15, color: AdminEmpColors.muted),
-                ),
+                child: Text(emptyText,
+                    style: const TextStyle(color: AdminEmpColors.muted, fontSize: 14)),
               ),
             )
           else
-            for (var i = 0; i < rows.length; i++) ...[
-              _row(rows[i], compact),
-              if (i != rows.length - 1) const Divider(height: 1, color: Color(0xFFEDEFF3)),
+            for (int i = 0; i < rows.length; i++) ...[
+              _row(rows[i]),
+              if (i != rows.length - 1)
+                const Divider(height: 1, color: Color(0xFFEDEFF3), indent: 16, endIndent: 16),
             ],
         ],
       ),
     );
   }
 
-  Widget _row(AdminPendingRowData r, bool compact) {
-    final text = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          r.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: compact ? 14.5 : 16,
-            fontWeight: FontWeight.w600,
-            color: AdminEmpColors.text,
-          ),
-        ),
-        SizedBox(height: compact ? 2 : 3),
-        Text(
-          r.subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: compact ? 12.5 : 13.5, color: AdminEmpColors.muted),
-        ),
-      ],
-    );
-
-    final buttons = AdminApproveRejectButtons(onApprove: r.onApprove, onReject: r.onReject);
-    final vPad = compact ? 10.0 : 14.0;
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        // narrow (phone): buttons go under the text
-        if (c.maxWidth < 420) {
-          return Padding(
-            padding: EdgeInsets.symmetric(vertical: vPad),
+  Widget _row(AdminPendingRowData r) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // left: name + details
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [text, SizedBox(height: compact ? 8 : 10), buttons],
+              children: [
+                Text(
+                  r.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: AdminEmpColors.text,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  r.subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AdminEmpColors.muted),
+                ),
+              ],
             ),
-          );
-        }
-        return Padding(
-          padding: EdgeInsets.symmetric(vertical: vPad),
-          child: Row(
-            children: [
-              Expanded(child: text),
-              const SizedBox(width: 12),
-              buttons,
-            ],
           ),
-        );
-      },
+          const SizedBox(width: 10),
+          // right: Approve + Reject side by side
+          SizedBox(
+            width: _approveWidth,
+            height: _btnHeight,
+            child: ElevatedButton(
+              onPressed: r.onApprove,
+              style: ElevatedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                backgroundColor: AdminEmpColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Approve',
+                  style: TextStyle(fontSize: _btnFont, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: _rejectWidth,
+            height: _btnHeight,
+            child: OutlinedButton(
+              onPressed: r.onReject,
+              style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: AdminEmpColors.danger,
+                side: const BorderSide(color: AdminEmpColors.border),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Reject',
+                  style: TextStyle(fontSize: _btnFont, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
